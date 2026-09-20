@@ -40,6 +40,21 @@ export default function Plans() {
         <button className="btn primary" onClick={create}>新規作成</button>
       </div>
       <div className="card">
+        <h3>名簿一括取込（年度当初・管理職用 CSV: 管理番号,学年,在籍,学校）</h3>
+        <input type="file" accept=".csv" onChange={async e => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          const text = await f.text();
+          const rows = text.split(/\r?\n/).slice(1).map(l => l.split(",").map(s => s.trim())).filter(c => c[0])
+            .map(c => ({ child_code: c[0], grade: c[1] || "", class_type: c[2] || "", school: c[3] || "" }));
+          try {
+            const j = await api("/api/admin/roster", { method: "POST", headers: authHeaders(), body: JSON.stringify({ rows }) });
+            setMsg(`取込：作成${j.created.length}件・スキップ${j.skipped.length}件`);
+            load();
+          } catch (err: any) { setMsg(`取込失敗: ${err.message}`); }
+        }} />
+      </div>
+      <div className="card">
         絞り込み：
         <select value={filter} onChange={e => setFilter(e.target.value)}>
           <option value="">すべて</option>

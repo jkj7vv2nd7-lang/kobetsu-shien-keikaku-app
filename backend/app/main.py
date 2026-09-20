@@ -55,10 +55,77 @@ def health():
     return info
 
 
+@app.get("/api/share/{token}")
+def public_share(token: str):
+    """保護者共有リンク（ログイン不要・期限・取消・閲覧記録つき）。"""
+    import re as _re
+    import time as _t
+    if not _re.fullmatch(r"[A-Za-z0-9_-]{1,64}", token or ""):
+        from fastapi import HTTPException as _HE
+        raise _HE(404, "not found")
+    with db.conn() as c:
+        s = c.execute("SELECT * FROM shares WHERE token=?", (token,)).fetchone()
+        if not s:
+            from fastapi import HTTPException as _HE
+            raise _HE(404, "not found")
+        s = dict(s)
+        if s["revoked"] or s["expires_at"] < _t.time():
+            from fastapi import HTTPException as _HE
+            raise _HE(410, "リンクの期限切れ・取消済み")
+        p = c.execute("SELECT child_code,grade,class_type,status,data_json FROM plans WHERE id=?", (s["plan_id"],)).fetchone()
+        if not p:
+            from fastapi import HTTPException as _HE
+            raise _HE(404, "not found")
+        p = dict(p)
+    try:
+        data = json.loads(p.pop("data_json") or "{}")
+    except Exception:
+        data = {}
+    # PII項目は保護者本人の確認用に含める（リンク自体が合意形成の手段）
+    db.audit("share", "share.view", s["plan_id"], token[:8] + "...")
+    return {"child_code": p["child_code"], "grade": p["grade"], "class_type": p["class_type"],
+            "status": p["status"], "data": data}
+
+
 @app.get("/api/audit")
 def audit_list(limit: int = 200, user: dict = Depends(auth.current_user)):
     auth.require_role(user, "admin", "manager")
     return db.audit_list(limit)
+
+
+@app.post("/api/admin/roster")
+def roster_import(body: dict, user: dict = Depends(auth.current_user)):
+    """名簿CSV相当の一括取込（年度当初用）。rows:[{child_code,grade,class_type,school}]。200件上限。"""
+    auth.require_role(user, "admin", "manager")
+    import time as _t
+    import uuid as _uuid
+    rows = (body or {}).get("rows", [])
+    if not isinstance(rows, list) or len(rows) > 200:
+        from fastapi import HTTPException as _HE
+        raise _HE(400, "rowsは配列・200件以内にしてください")
+    created, skipped = [], []
+    with db.conn() as c:
+        for r in rows:
+            code = str((r or {}).get("child_code", "")).strip()[:100]
+            if not code:
+                skipped.append({"row": r, "reason": "管理番号なし"})
+                continue
+            if c.execute("SELECT id FROM plans WHERE child_code=?", (code,)).fetchone():
+                skipped.append({"child_code": code, "reason": "既存"})
+                continue
+            pid = _uuid.uuid4().hex[:12]
+            data = {"child_code": code, "grade": str(r.get("grade", ""))[:100],
+                    "class_type": str(r.get("class_type", ""))[:100]}
+            c.execute("""INSERT INTO plans(id,child_code,school,grade,class_type,status,data_json,
+                         created_by,updated_by,guardian_confirmed,guardian_date,created_at,updated_at)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                      (pid, code, str(r.get("school", user.get("school", "")))[:100],
+                       data["grade"], data["class_type"], "draft",
+                       json.dumps(data, ensure_ascii=False), user["username"], user["username"],
+                       0, "", _t.time(), _t.time()))
+            created.append({"id": pid, "child_code": code})
+    db.audit(user["username"], "admin.roster", "", f"created={len(created)} skipped={len(skipped)}")
+    return {"created": created, "skipped": skipped}
 
 
 @app.get("/api/audit/export")

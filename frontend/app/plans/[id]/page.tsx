@@ -181,9 +181,44 @@ export default function PlanDetail() {
         )}
       </div>
       <ul>{issues.map((i, n) => <li key={n}>[{i.level}/{i.rule}] {i.msg || i.hit}</li>)}</ul>
+      <Shares id={id} />
       <Comments id={id} />
       <Records id={id} />
     </main>
+  );
+}
+
+function Shares({ id }: { id: string }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [days, setDays] = useState("7");
+  const [msg, setMsg] = useState("");
+  async function load() {
+    try { setRows(await api(`/api/plans/${id}/shares`, { headers: authHeaders() })); } catch {}
+  }
+  useEffect(() => { load(); }, [id]);
+  async function create() {
+    try {
+      const j = await api(`/api/plans/${id}/shares`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ days: Number(days) || 7 }) });
+      setMsg(`発行：${window.location.origin}/share/${j.token}（${j.days}日間）`);
+      load();
+    } catch (e: any) { setMsg(`発行失敗: ${e.message}`); }
+  }
+  async function revoke(sid: string) {
+    await api(`/api/plans/${id}/shares/${sid}`, { method: "DELETE", headers: authHeaders() });
+    load();
+  }
+  return (
+    <div className="card noprint" style={{ marginTop: 12 }}>
+      <h3>保護者共有リンク（提出以降・期限付き）</h3>
+      <p className="muted">閲覧は記録されます。不要になったら取消してください。</p>
+      <input value={days} onChange={e => setDays(e.target.value)} style={{ width: 60 }} /> 日間
+      <button className="btn primary" onClick={create} style={{ marginLeft: 8 }}>発行</button>
+      <p className="muted">{msg}</p>
+      <ul>{rows.map(r => <li key={r.id}>
+        {r.revoked ? "取消済" : `期限 ${new Date(r.expires_at * 1000).toLocaleDateString("ja-JP")}`}
+        {!r.revoked && <button className="btn" onClick={() => revoke(r.id)} style={{ marginLeft: 8 }}>取消</button>}
+      </li>)}</ul>
+    </div>
   );
 }
 

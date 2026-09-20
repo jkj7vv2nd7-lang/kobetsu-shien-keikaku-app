@@ -225,6 +225,48 @@ def duplicate_plan(pid: str, user: dict = Depends(auth.current_user)):
     return {"id": nid, "from": pid}
 
 
+class ShareBody(BaseModel):
+    days: int = 7
+
+
+@router.get("/{pid}/shares")
+def list_shares(pid: str, user: dict = Depends(auth.current_user)):
+    _get_plan_or_403(pid, user)
+    with db.conn() as c:
+        rows = c.execute("SELECT id,plan_id,expires_at,revoked,created_by,created_at FROM shares WHERE plan_id=? ORDER BY created_at DESC", (pid,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+@router.post("/{pid}/shares")
+def create_share(pid: str, body: ShareBody, user: dict = Depends(auth.current_user)):
+    """保護者共有リンク発行（期限付き・取消可・閲覧記録）。planはreview以上が条件。"""
+    _get_plan_or_403(pid, user)
+    auth.require_role(user, "admin", "manager", "teacher")
+    import secrets as _secrets
+    days = max(1, min(int(body.days or 7), 30))
+    with db.conn() as c:
+        st = c.execute("SELECT status FROM plans WHERE id=?", (pid,)).fetchone()
+        if not st or dict(st)["status"] not in ("review", "approved"):
+            raise HTTPException(400, "共有は提出(review)以降の計画のみ可能です")
+        sid = uuid.uuid4().hex[:12]
+        tok = _secrets.token_urlsafe(24)
+        now = time.time()
+        c.execute("INSERT INTO shares(id,plan_id,token,expires_at,revoked,created_by,created_at) VALUES(?,?,?,?,?,?,?)",
+                  (sid, pid, tok, now + days * 86400, 0, user["username"], now))
+    db.audit(user["username"], "plan.share_create", pid, f"{days}日")
+    return {"id": sid, "token": tok, "path": f"/share/{tok}", "days": days}
+
+
+@router.delete("/{pid}/shares/{sid}")
+def revoke_share(pid: str, sid: str, user: dict = Depends(auth.current_user)):
+    _get_plan_or_403(pid, user)
+    auth.require_role(user, "admin", "manager", "teacher")
+    with db.conn() as c:
+        c.execute("UPDATE shares SET revoked=1 WHERE id=? AND plan_id=?", (sid, pid))
+    db.audit(user["username"], "plan.share_revoke", pid, sid)
+    return {"ok": True}
+
+
 @router.get("/{pid}/records")
 def list_records(pid: str, user: dict = Depends(auth.current_user)):
     """日々の指導記録（目標紐付け）の一覧。"""
