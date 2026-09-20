@@ -49,6 +49,12 @@ CREATE TABLE IF NOT EXISTS consents(
   id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, consenter TEXT NOT NULL,
   method TEXT NOT NULL DEFAULT '', plan_hash TEXT NOT NULL DEFAULT '',
   agreed_at REAL NOT NULL, ip TEXT DEFAULT '', created_by TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS versions(
+  id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, version_no INTEGER NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '{}', created_by TEXT DEFAULT '', created_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS snippets(
+  id TEXT PRIMARY KEY, category TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '', created_by TEXT DEFAULT '', created_at REAL NOT NULL);
 """
 
 SCHEMA_PG = """
@@ -87,6 +93,12 @@ CREATE TABLE IF NOT EXISTS consents(
   id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, consenter TEXT NOT NULL,
   method TEXT NOT NULL DEFAULT '', plan_hash TEXT NOT NULL DEFAULT '',
   agreed_at DOUBLE PRECISION NOT NULL, ip TEXT DEFAULT '', created_by TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS versions(
+  id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, version_no INTEGER NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '{}', created_by TEXT DEFAULT '', created_at DOUBLE PRECISION NOT NULL);
+CREATE TABLE IF NOT EXISTS snippets(
+  id TEXT PRIMARY KEY, category TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '', created_by TEXT DEFAULT '', created_at DOUBLE PRECISION NOT NULL);
 """
 
 

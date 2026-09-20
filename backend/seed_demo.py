@@ -69,6 +69,8 @@ DEMOS = [
 def create_demo_plans() -> list:
     db.init_db()
     auth.seed()
+    from app.seed_data import seed_snippets
+    seed_snippets()
     with db.conn() as c:
         others = c.execute("SELECT COUNT(*) AS n FROM plans WHERE child_code NOT LIKE 'DEMO-%'").fetchone()
         if dict(others)["n"] > 0:

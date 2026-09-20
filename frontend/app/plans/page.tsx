@@ -6,9 +6,10 @@ export default function Plans() {
   const [plans, setPlans] = useState<any[]>([]);
   const [msg, setMsg] = useState("");
   const [filter, setFilter] = useState("");
+  const [q, setQ] = useState("");
   const [form, setForm] = useState({ child_code: "S-2026-001", grade: "小4", class_type: "特別支援学級", school: "" });
-  async function load() {
-    try { setPlans(await api("/api/plans", { headers: authHeaders() })); setMsg(""); }
+  async function load(query?: string) {
+    try { setPlans(await api(`/api/plans${query ? `?q=${encodeURIComponent(query)}` : ""}`, { headers: authHeaders() })); setMsg(""); }
     catch (e: any) { setMsg(`読込失敗（要ログイン）: ${e.message}`); }
   }
   useEffect(() => { load(); }, []);
@@ -55,6 +56,8 @@ export default function Plans() {
         }} />
       </div>
       <div className="card">
+        検索：<input value={q} onChange={e => setQ(e.target.value)} placeholder="管理番号・学年" style={{ width: 180 }} />
+        <button className="btn" onClick={() => load(q)} style={{ marginLeft: 8 }}>検索</button>
         絞り込み：
         <select value={filter} onChange={e => setFilter(e.target.value)}>
           <option value="">すべて</option>

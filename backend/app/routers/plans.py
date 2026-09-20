@@ -76,13 +76,15 @@ def validate_plan(data: dict) -> dict:
 
 
 @router.get("")
-def list_plans(user: dict = Depends(auth.current_user)):
+def list_plans(q: str = "", user: dict = Depends(auth.current_user)):
+    like = f"%{(q or '')[:50]}%"
     with db.conn() as c:
         if user["role"] in ("admin", "manager"):
-            rows = c.execute("SELECT * FROM plans ORDER BY updated_at DESC LIMIT 500").fetchall()
+            rows = c.execute("SELECT * FROM plans WHERE (?='' OR child_code LIKE ? OR grade LIKE ?) ORDER BY updated_at DESC LIMIT 500",
+                             (q or "", like, like)).fetchall()
         else:
-            rows = c.execute("SELECT * FROM plans WHERE created_by=? OR school=? ORDER BY updated_at DESC LIMIT 500",
-                             (user["username"], user.get("school", ""))).fetchall()
+            rows = c.execute("SELECT * FROM plans WHERE (created_by=? OR school=?) AND (?='' OR child_code LIKE ? OR grade LIKE ?) ORDER BY updated_at DESC LIMIT 500",
+                             (user["username"], user.get("school", ""), q or "", like, like)).fetchall()
         return [_row_to_plan(dict(r)) for r in rows]
 
 
@@ -126,6 +128,14 @@ def update_plan(pid: str, body: PlanBody, user: dict = Depends(auth.current_user
                      "grade": body.grade or src["grade"],
                      "class_type": body.class_type or src["class_type"]})
         now = time.time()
+        # 更新前のスナップショットを履歴に保存（最新20件保持）
+        prev_no = c.execute("SELECT COALESCE(MAX(version_no),0) AS m FROM versions WHERE plan_id=?", (pid,)).fetchone()
+        nxt = dict(prev_no)["m"] + 1
+        c.execute("INSERT INTO versions(id,plan_id,version_no,data_json,created_by,created_at) VALUES(?,?,?,?,?,?)",
+                  (uuid.uuid4().hex[:12], pid, nxt, src["data_json"], user["username"], now))
+        olds = [dict(r)["id"] for r in c.execute("SELECT id FROM versions WHERE plan_id=? ORDER BY version_no DESC", (pid,)).fetchall()][20:]
+        for oid in olds:
+            c.execute("DELETE FROM versions WHERE id=?", (oid,))
         c.execute("""UPDATE plans SET child_code=?,school=?,grade=?,class_type=?,data_json=?,
                      updated_by=?,guardian_confirmed=?,guardian_date=?,updated_at=?,status=CASE WHEN status='approved' THEN 'review' ELSE status END
                      WHERE id=?""",
@@ -339,3 +349,86 @@ def add_consent(pid: str, body: ConsentBody, req: Request, user: dict = Depends(
                   (json.dumps({**json.loads(dict(r)["data_json"] or "{}"), "guardian_confirmed": True}, ensure_ascii=False), pid))
     db.audit(user["username"], "plan.consent", pid, f"{body.method} {h[:8]}")
     return {"id": cid, "plan_hash": h}
+
+
+@router.get("/{pid}/versions")
+def list_versions(pid: str, user: dict = Depends(auth.current_user)):
+    """変更履歴（変更キーつき）。"""
+    _get_plan_or_403(pid, user)
+    with db.conn() as c:
+        rows = [dict(r) for r in c.execute("SELECT version_no,data_json,created_by,created_at FROM versions WHERE plan_id=? ORDER BY version_no DESC", (pid,)).fetchall()]
+    out = []
+    prev = None
+    for r in sorted(rows, key=lambda x: x["version_no"]):
+        try:
+            cur = json.loads(r["data_json"] or "{}")
+        except Exception:
+            cur = {}
+        changed = sorted([k for k in set(cur) | set(prev or {}) if (prev or {}).get(k) != cur.get(k)]) if prev is not None else []
+        out.append({"version_no": r["version_no"], "created_by": r["created_by"],
+                    "created_at": r["created_at"], "changed_keys": changed})
+        prev = cur
+    return list(reversed(out))
+
+
+@router.post("/{pid}/restore/{version_no}")
+def restore_version(pid: str, version_no: int, user: dict = Depends(auth.current_user)):
+    """指定版に復元（復元自体も履歴に残る）。承認済みは管理職のみ。"""
+    auth.require_role(user, "admin", "manager", "teacher")
+    src = _get_plan_or_403(pid, user)
+    if src["status"] == "approved" and user["role"] not in ("admin", "manager"):
+        raise HTTPException(403, "承認済みは管理職のみ修正可")
+    with db.conn() as c:
+        r = c.execute("SELECT data_json FROM versions WHERE plan_id=? AND version_no=?", (pid, version_no)).fetchone()
+        if not r:
+            raise HTTPException(404, "version not found")
+        data = json.loads(dict(r)["data_json"] or "{}")
+        now = time.time()
+        prev_no = c.execute("SELECT COALESCE(MAX(version_no),0) AS m FROM versions WHERE plan_id=?", (pid,)).fetchone()
+        c.execute("INSERT INTO versions(id,plan_id,version_no,data_json,created_by,created_at) VALUES(?,?,?,?,?,?)",
+                  (uuid.uuid4().hex[:12], pid, dict(prev_no)["m"] + 1, src["data_json"], user["username"], now))
+        c.execute("UPDATE plans SET data_json=?,updated_by=?,updated_at=?,status=CASE WHEN status='approved' THEN 'review' ELSE status END WHERE id=?",
+                  (json.dumps(data, ensure_ascii=False), user["username"], now, pid))
+    db.audit(user["username"], "plan.restore", pid, f"v{version_no}")
+    return {"id": pid, **validate_plan(data)}
+
+
+class SnippetBody(BaseModel):
+    category: str = ""
+    title: str = ""
+    body: str = ""
+
+
+@router.get("/snippets/all")
+def list_snippets(category: str = "", user: dict = Depends(auth.current_user)):
+    with db.conn() as c:
+        if category:
+            rows = c.execute("SELECT * FROM snippets WHERE category=? ORDER BY created_at DESC LIMIT 500", (category,)).fetchall()
+        else:
+            rows = c.execute("SELECT * FROM snippets ORDER BY category, created_at DESC LIMIT 500").fetchall()
+        return [dict(r) for r in rows]
+
+
+@router.post("/snippets/all")
+def create_snippet(body: SnippetBody, user: dict = Depends(auth.current_user)):
+    auth.require_role(user, "admin", "manager", "teacher")
+    if not body.title.strip() or not body.body.strip():
+        raise HTTPException(400, "タイトル・本文は必須です")
+    if len(body.body) > 2000:
+        raise HTTPException(400, "本文は2000字以内にしてください")
+    with db.conn() as c:
+        sid = uuid.uuid4().hex[:12]
+        c.execute("INSERT INTO snippets(id,category,title,body,created_by,created_at) VALUES(?,?,?,?,?,?)",
+                  (sid, body.category.strip()[:50], body.title.strip()[:100], body.body.strip(),
+                   user["username"], time.time()))
+    db.audit(user["username"], "snippet.create", sid, body.title.strip()[:50])
+    return {"id": sid}
+
+
+@router.delete("/snippets/all/{sid}")
+def delete_snippet(sid: str, user: dict = Depends(auth.current_user)):
+    auth.require_role(user, "admin", "manager")
+    with db.conn() as c:
+        c.execute("DELETE FROM snippets WHERE id=?", (sid,))
+    db.audit(user["username"], "snippet.delete", sid, "")
+    return {"ok": True}

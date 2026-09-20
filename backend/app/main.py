@@ -16,6 +16,11 @@ from app.routers.plans import validate_plan
 
 db.init_db()
 auth.seed()
+try:
+    from app.seed_data import seed_snippets
+    seed_snippets()
+except Exception:
+    pass
 
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
@@ -253,3 +258,24 @@ def oneroster_import(body: dict, user: dict = Depends(auth.current_user)):
                     skipped.append({"sourcedId": sid, "reason": "既存計画"})
     db.audit(user["username"], "admin.oneroster", "", f"teachers={len(teachers)} students={len(students)} skipped={len(skipped)}")
     return {"teachers": teachers, "students": students, "skipped": skipped}
+
+
+@app.get("/api/admin/archive")
+def archive_all(user: dict = Depends(auth.current_user)):
+    """全計画の一括出力（年度アーカイブ用・管理職のみ）。"""
+    import io as _io
+    import time as _t
+    import zipfile as _zf
+    from fastapi.responses import Response as _Resp
+    auth.require_role(user, "admin", "manager")
+    buf = _io.BytesIO()
+    with _zf.ZipFile(buf, "w", _zf.ZIP_DEFLATED) as zf:
+        with db.conn() as c:
+            plans = [dict(r) for r in c.execute("SELECT * FROM plans ORDER BY child_code").fetchall()]
+            for p in plans:
+                zf.writestr(f"plans/{p['child_code']}_{p['id']}.json",
+                            json.dumps(p, ensure_ascii=False, indent=2, default=str))
+    payload = buf.getvalue()
+    db.audit(user["username"], "admin.archive", "", f"{len(plans)}件")
+    return _Resp(content=payload, media_type="application/zip",
+                 headers={"Content-Disposition": f"attachment; filename=archive_{_t.strftime('%Y%m%d')}.zip"})

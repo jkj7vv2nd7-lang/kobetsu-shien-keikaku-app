@@ -14,6 +14,8 @@ export default function PlanDetail() {
   const [draftTarget, setDraftTarget] = useState("guidance_long_goal");
   const [polish, setPolish] = useState<Record<string, any>>({});
   const [nori, setNori] = useState<any[]>([]);
+  const [snips, setSnips] = useState<any[]>([]);
+  const [snipId, setSnipId] = useState("");
   const [msg, setMsg] = useState("");
 
   async function load() {
@@ -68,6 +70,15 @@ export default function PlanDetail() {
         body: JSON.stringify({ plan_id: id }) });
       setNori(j.proposals || []);
     } catch (e: any) { setMsg(`提案失敗: ${e.message}`); }
+  }
+  async function loadSnips() {
+    try { setSnips(await api(`/api/plans/snippets/all`, { headers: authHeaders() })); } catch {}
+  }
+  function applySnip() {
+    const s = snips.find(x => x.id === snipId);
+    if (!s) return;
+    setData({ ...data, [draftTarget]: ((data[draftTarget] || "") + "\n" + s.body).trim() });
+    setMsg(`定型文「${s.title}」を追加（要確認・修正）`);
   }
   function applyNori(p: any) {
     setData({ ...data, start_ease: ((data.start_ease || "") + "\n" + p.body).trim() });
@@ -174,6 +185,18 @@ export default function PlanDetail() {
           <button className="btn" onClick={() => handover("csv")} style={{ marginLeft: 8 }}>引継ぎCSV</button>
           <button className="btn" onClick={() => handover("json")} style={{ marginLeft: 8 }}>引継ぎJSON</button>
         </div>
+        <div style={{ marginTop: 8 }}>
+          定型文：
+          <select value={snipId} onChange={e => { setSnipId(e.target.value); if (snips.length === 0) loadSnips(); }} onFocus={loadSnips} style={{ maxWidth: 320 }}>
+            <option value="">（選択）</option>
+            {snips.map(s => <option key={s.id} value={s.id}>[{s.category || "共通"}] {s.title}</option>)}
+          </select>
+          <button className="btn" onClick={applySnip} style={{ marginLeft: 8 }}>反映先の欄に追加</button>
+        </div>
+        <details style={{ marginTop: 6 }}>
+          <summary className="muted">定型文を新規登録</summary>
+          <SnippetForm onDone={loadSnips} />
+        </details>
         {ai && <pre className="ai">{ai}</pre>}
         {nori.length > 0 && (
           <div style={{ marginTop: 8 }}>{nori.map((p: any, i: number) => (
@@ -188,9 +211,29 @@ export default function PlanDetail() {
       <ul>{issues.map((i, n) => <li key={n}>[{i.level}/{i.rule}] {i.msg || i.hit}</li>)}</ul>
       <Shares id={id} />
       <Consents id={id} />
+      <Versions id={id} data={data} setData={setData} />
       <Comments id={id} />
       <Records id={id} />
     </main>
+  );
+}
+
+function SnippetForm({ onDone }: { onDone: () => void }) {
+  const [cat, setCat] = useState("");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  async function save() {
+    await api(`/api/plans/snippets/all`, { method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ category: cat, title, body }) });
+    setCat(""); setTitle(""); setBody(""); onDone();
+  }
+  return (
+    <div style={{ marginTop: 6 }}>
+      <input value={cat} onChange={e => setCat(e.target.value)} placeholder="分類" style={{ width: 100 }} />
+      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タイトル" style={{ marginLeft: 6, width: 200 }} />
+      <input value={body} onChange={e => setBody(e.target.value)} placeholder="本文" style={{ marginLeft: 6, width: 300 }} />
+      <button className="btn" onClick={save} style={{ marginLeft: 6 }}>登録</button>
+    </div>
   );
 }
 
@@ -255,6 +298,34 @@ function Consents({ id }: { id: string }) {
         <option>対面</option><option>共有リンク</option><option>書面</option>
       </select>
       <button className="btn primary" onClick={add} style={{ marginLeft: 8 }}>記録</button>
+      <p className="muted">{msg}</p>
+    </div>
+  );
+}
+
+function Versions({ id, data, setData }: { id: string; data: any; setData: any }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [msg, setMsg] = useState("");
+  async function load() {
+    try { setRows(await api(`/api/plans/${id}/versions`, { headers: authHeaders() })); } catch {}
+  }
+  useEffect(() => { load(); }, [id]);
+  async function restore(v: number) {
+    if (!confirm(`版${v}に復元しますか？（現在の内容は履歴に残ります）`)) return;
+    try {
+      await api(`/api/plans/${id}/restore/${v}`, { method: "POST", headers: authHeaders() });
+      const p = await api(`/api/plans/${id}`, { headers: authHeaders() });
+      setData(p.data || {}); setMsg(`版${v}に復元しました。内容を確認して保存してください`);
+      load();
+    } catch (e: any) { setMsg(`復元失敗: ${e.message}`); }
+  }
+  if (rows.length === 0) return null;
+  return (
+    <div className="card noprint" style={{ marginTop: 12 }}>
+      <h3>変更履歴（直近{rows.length}件）</h3>
+      <ul>{rows.map(r => <li key={r.version_no}>版{r.version_no}・{r.created_by}・{new Date(r.created_at * 1000).toLocaleString("ja-JP")}
+        {r.changed_keys?.length > 0 && `（変更：${r.changed_keys.slice(0, 8).join("、")}）`}
+        <button className="btn" onClick={() => restore(r.version_no)} style={{ marginLeft: 8 }}>復元</button></li>)}</ul>
       <p className="muted">{msg}</p>
     </div>
   );

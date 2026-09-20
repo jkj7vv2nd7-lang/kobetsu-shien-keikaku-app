@@ -36,3 +36,26 @@ def register_niigata(tid: str = TID) -> dict:
                   (tid, "kobetsu_niigata.xlsx", ".xlsx", "新潟県様式（参考・個別の教育支援計画＋指導計画）",
                    json.dumps(mapping, ensure_ascii=False), "seed", time.time()))
     return {"template_id": tid, "slots": len(slots), "mapping": len(mapping)}
+
+
+SNIPPETS = [
+    ("見通し", "予定表の提示", "1日の流れを予定表で見せ、次が見通せるようにします。切り替えの3分前に予告します。"),
+    ("見通し", "手順表の活用", "やることを手順表にして1つずつ確かめます。できたらその場で称賛します。"),
+    ("関わり", "仲立ちの工夫", "教師が仲立ちして関わるきっかけを作ります。難しいときは気持ちを代弁します。"),
+    ("関わり", "クールダウン", "気持ちが高ぶったら、本人の合図でクールダウンスペースを使えるようにします。"),
+    ("評価", "ふりかえりの言葉", "できたこと・兆しを具体的に伝え、次のめあてを本人と確認します。"),
+]
+
+
+def seed_snippets() -> int:
+    import uuid
+    db.init_db()
+    n = 0
+    with db.conn() as c:
+        for cat, title, body in SNIPPETS:
+            if c.execute("SELECT id FROM snippets WHERE category=? AND title=?", (cat, title)).fetchone():
+                continue
+            c.execute("INSERT INTO snippets(id,category,title,body,created_by,created_at) VALUES(?,?,?,?,?,?)",
+                      (uuid.uuid4().hex[:12], cat, title, body, "seed", time.time()))
+            n += 1
+    return n
