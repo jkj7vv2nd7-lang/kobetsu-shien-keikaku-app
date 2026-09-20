@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS shares(
   id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, token TEXT UNIQUE NOT NULL,
   expires_at REAL NOT NULL, revoked INTEGER DEFAULT 0,
   created_by TEXT DEFAULT '', created_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS consents(
+  id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, consenter TEXT NOT NULL,
+  method TEXT NOT NULL DEFAULT '', plan_hash TEXT NOT NULL DEFAULT '',
+  agreed_at REAL NOT NULL, ip TEXT DEFAULT '', created_by TEXT DEFAULT '');
 """
 
 SCHEMA_PG = """
@@ -79,6 +83,10 @@ CREATE TABLE IF NOT EXISTS shares(
   id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, token TEXT UNIQUE NOT NULL,
   expires_at DOUBLE PRECISION NOT NULL, revoked INTEGER DEFAULT 0,
   created_by TEXT DEFAULT '', created_at DOUBLE PRECISION NOT NULL);
+CREATE TABLE IF NOT EXISTS consents(
+  id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, consenter TEXT NOT NULL,
+  method TEXT NOT NULL DEFAULT '', plan_hash TEXT NOT NULL DEFAULT '',
+  agreed_at DOUBLE PRECISION NOT NULL, ip TEXT DEFAULT '', created_by TEXT DEFAULT '');
 """
 
 

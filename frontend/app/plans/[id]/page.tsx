@@ -120,6 +120,11 @@ export default function PlanDetail() {
             <input value={data[k] ?? plan[k] ?? ""} onChange={e => setData({ ...data, [k]: e.target.value })} style={{ width: 140 }} />
           </span>
         ))}
+        {[["class_name", "組"], ["student_no", "出席番号"]].map(([k, label]) => (
+          <span key={k} style={{ marginRight: 12 }}>{label}：
+            <input value={data[k] || ""} onChange={e => setData({ ...data, [k]: e.target.value })} style={{ width: 80 }} />
+          </span>
+        ))}
       </div>
       <p style={{ fontSize: 13, color: "#555" }}>［個人情報］印の項目は印刷時のみ使用し、AIには送信されません。文章は短い文・ですます調で（保存時に自動チェック）。</p>
       <h3>基本・文科省項目</h3>
@@ -182,6 +187,7 @@ export default function PlanDetail() {
       </div>
       <ul>{issues.map((i, n) => <li key={n}>[{i.level}/{i.rule}] {i.msg || i.hit}</li>)}</ul>
       <Shares id={id} />
+      <Consents id={id} />
       <Comments id={id} />
       <Records id={id} />
     </main>
@@ -218,6 +224,38 @@ function Shares({ id }: { id: string }) {
         {r.revoked ? "取消済" : `期限 ${new Date(r.expires_at * 1000).toLocaleDateString("ja-JP")}`}
         {!r.revoked && <button className="btn" onClick={() => revoke(r.id)} style={{ marginLeft: 8 }}>取消</button>}
       </li>)}</ul>
+    </div>
+  );
+}
+
+function Consents({ id }: { id: string }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [name, setName] = useState("");
+  const [method, setMethod] = useState("対面");
+  const [msg, setMsg] = useState("");
+  async function load() {
+    try { setRows(await api(`/api/plans/${id}/consents`, { headers: authHeaders() })); } catch {}
+  }
+  useEffect(() => { load(); }, [id]);
+  async function add() {
+    try {
+      const j = await api(`/api/plans/${id}/consents`, { method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ consenter: name, method }) });
+      setMsg(`記録しました（内容ハッシュ ${j.plan_hash?.slice(0, 8)}…）。保護者確認も自動で付与されます`);
+      setName(""); load();
+    } catch (e: any) { setMsg(`記録失敗: ${e.message}`); }
+  }
+  return (
+    <div className="card noprint" style={{ marginTop: 12 }}>
+      <h3>合意の記録（電子確認・内容ハッシュ付き）</h3>
+      <p className="muted">合意時点の内容をハッシュで特定します（法的電子署名ではありません）。</p>
+      <ul>{rows.map(r => <li key={r.id}>{r.consenter}・{r.method}・{new Date(r.agreed_at * 1000).toLocaleString("ja-JP")}・ハッシュ{r.plan_hash?.slice(0, 8)}</li>)}</ul>
+      <input value={name} onChange={e => setName(e.target.value)} placeholder="合意者氏名" />
+      <select value={method} onChange={e => setMethod(e.target.value)} style={{ marginLeft: 8 }}>
+        <option>対面</option><option>共有リンク</option><option>書面</option>
+      </select>
+      <button className="btn primary" onClick={add} style={{ marginLeft: 8 }}>記録</button>
+      <p className="muted">{msg}</p>
     </div>
   );
 }

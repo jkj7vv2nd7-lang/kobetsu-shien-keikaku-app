@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app import db, auth
@@ -297,3 +297,45 @@ def add_record(pid: str, body: RecordBody, user: dict = Depends(auth.current_use
                   (rid, pid, user["username"], d, (body.goal_ref or "")[:100], body.body.strip(), time.time()))
     db.audit(user["username"], "plan.record", pid, d)
     return {"id": rid}
+
+
+def plan_hash(data: dict) -> str:
+    """合意内容の特定用ハッシュ（正規化JSONのSHA256）。法的電子署名ではない。"""
+    import hashlib
+    canon = json.dumps(data or {}, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:32]
+
+
+class ConsentBody(BaseModel):
+    consenter: str = ""
+    method: str = ""  # 対面 / 共有リンク / 書面
+
+
+@router.get("/{pid}/consents")
+def list_consents(pid: str, user: dict = Depends(auth.current_user)):
+    _get_plan_or_403(pid, user)
+    with db.conn() as c:
+        rows = c.execute("SELECT id,consenter,method,plan_hash,agreed_at,ip,created_by FROM consents WHERE plan_id=? ORDER BY agreed_at DESC", (pid,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+@router.post("/{pid}/consents")
+def add_consent(pid: str, body: ConsentBody, req: Request, user: dict = Depends(auth.current_user)):
+    _get_plan_or_403(pid, user)
+    auth.require_role(user, "admin", "manager", "teacher")
+    if not body.consenter.strip():
+        raise HTTPException(400, "合意者氏名は必須です")
+    if body.method not in ("対面", "共有リンク", "書面"):
+        raise HTTPException(400, "方法は 対面/共有リンク/書面 から選択してください")
+    ip = req.client.host if req.client else ""
+    with db.conn() as c:
+        r = c.execute("SELECT data_json FROM plans WHERE id=?", (pid,)).fetchone()
+        h = plan_hash(json.loads(dict(r)["data_json"] or "{}"))
+        cid = uuid.uuid4().hex[:12]
+        now = time.time()
+        c.execute("INSERT INTO consents(id,plan_id,consenter,method,plan_hash,agreed_at,ip,created_by) VALUES(?,?,?,?,?,?,?,?)",
+                  (cid, pid, body.consenter.strip()[:100], body.method, h, now, ip, user["username"]))
+        c.execute("UPDATE plans SET data_json=? WHERE id=?",
+                  (json.dumps({**json.loads(dict(r)["data_json"] or "{}"), "guardian_confirmed": True}, ensure_ascii=False), pid))
+    db.audit(user["username"], "plan.consent", pid, f"{body.method} {h[:8]}")
+    return {"id": cid, "plan_hash": h}

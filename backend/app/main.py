@@ -192,3 +192,64 @@ def stats_summary(user: dict = Depends(auth.current_user)):
                "status": p["status"], "updated_at": p["updated_at"]} for p in items[:10]]
     return {"total": len(items), "by_status": by_status, "blocked": blocked, "recent": recent,
             "overdue": overdue, "due_soon": due_soon, "no_review_date": no_date}
+
+
+@app.post("/api/admin/oneroster")
+def oneroster_import(body: dict, user: dict = Depends(auth.current_user)):
+    """OneRoster users.csv 取込（教職員→ユーザ、児童生徒→計画下書き）。
+
+    対応列：sourcedId, enabledUser, givenName, familyName, role [teacher|student|administrator],
+    grades, orgSourcedIds。詳細は docs/oneroster.md。
+    """
+    import csv as _csv
+    import io as _io
+    import time as _t
+    import uuid as _uuid
+    auth.require_role(user, "admin", "manager")
+    text = ((body or {}).get("csv", "") or "")
+    if len(text) > 2 * 1024 * 1024:
+        from fastapi import HTTPException as _HE
+        raise _HE(400, "CSVは2MB以内にしてください")
+    try:
+        rows = list(_csv.DictReader(_io.StringIO(text)))
+    except Exception as e:  # noqa: BLE001
+        from fastapi import HTTPException as _HE
+        raise _HE(400, f"CSV解析失敗: {str(e)[:200]}")
+    if len(rows) > 1000:
+        from fastapi import HTTPException as _HE
+        raise _HE(400, "1000件以内にしてください")
+    teachers, students, skipped = [], [], []
+    with db.conn() as c:
+        for i, r in enumerate(rows):
+            sid = str(r.get("sourcedId", "") or "").strip()[:100]
+            role = str(r.get("role", "") or "").strip().lower()
+            if not sid or role not in ("teacher", "student", "administrator"):
+                skipped.append({"line": i + 2, "reason": "sourcedId/role不正"})
+                continue
+            if str(r.get("enabledUser", "TRUE")).strip().upper() == "FALSE":
+                skipped.append({"sourcedId": sid, "reason": "無効ユーザ"})
+                continue
+            if role in ("teacher", "administrator"):
+                uname = sid
+                app_role = "admin" if role == "administrator" else "teacher"
+                if not c.execute("SELECT id FROM users WHERE username=?", (uname,)).fetchone():
+                    from app import auth as _auth
+                    _auth.ensure_user(uname, _uuid.uuid4().hex, app_role, "")
+                    teachers.append(uname)
+                else:
+                    skipped.append({"sourcedId": sid, "reason": "既存ユーザ"})
+            else:
+                grades = str(r.get("grades", "") or "").strip()[:20]
+                if not c.execute("SELECT id FROM plans WHERE child_code=?", (sid,)).fetchone():
+                    pid = _uuid.uuid4().hex[:12]
+                    data = {"child_code": sid, "grade": grades, "class_type": ""}
+                    c.execute("""INSERT INTO plans(id,child_code,school,grade,class_type,status,data_json,
+                                 created_by,updated_by,guardian_confirmed,guardian_date,created_at,updated_at)
+                                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                              (pid, sid, "", grades, "", "draft", json.dumps(data, ensure_ascii=False),
+                               user["username"], user["username"], 0, "", _t.time(), _t.time()))
+                    students.append({"id": pid, "child_code": sid})
+                else:
+                    skipped.append({"sourcedId": sid, "reason": "既存計画"})
+    db.audit(user["username"], "admin.oneroster", "", f"teachers={len(teachers)} students={len(students)} skipped={len(skipped)}")
+    return {"teachers": teachers, "students": students, "skipped": skipped}
