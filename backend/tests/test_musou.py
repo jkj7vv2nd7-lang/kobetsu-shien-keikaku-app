@@ -25,6 +25,14 @@ def _client():
     return cc, {"Authorization": f"Bearer {t['token']}"}, {"Authorization": f"Bearer {m['token']}"}
 
 
+def test_propose_plain_no_double_suffix():
+    sys.path.insert(0, str(BASE / "src"))
+    from core.plain import propose_plain
+    r = propose_plain("通級指導教室と連携し、通級でも様子を見る。")
+    assert "指導教室指導教室" not in r["rewritten"]
+    assert "通級指導教室と連携" in r["rewritten"]
+
+
 def test_must_change_pw_flow():
     from fastapi.testclient import TestClient
     from app.main import app

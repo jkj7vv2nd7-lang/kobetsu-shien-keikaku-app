@@ -72,6 +72,10 @@ def propose_plain(text: str) -> dict:
     """
     out = text or ""
     applied = []
+    # 長い定型句を先に保護（部分置換の重複を防ぐ）
+    protected = {"通級指導教室": "\ue000"}
+    for phrase, mask in protected.items():
+        out = out.replace(phrase, mask)
     for term, alt in JARGON.items():
         if term == "障害":
             continue  # 法令・定型文脈が多いため自動置換しない
@@ -79,6 +83,8 @@ def propose_plain(text: str) -> dict:
             # 例示的な語（通級等）は初出のみ注記付きで置換
             out = out.replace(term, alt)
             applied.append({"from": term, "to": alt})
+    for phrase, mask in protected.items():
+        out = out.replace(mask, phrase)
     return {"rewritten": out, "applied": applied}
 
 

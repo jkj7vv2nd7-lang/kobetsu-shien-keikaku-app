@@ -5,8 +5,10 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE / "src"))
 
-from core.anonymize import anonymize, assert_safe_for_llm
+from core.anonymize import anonymize, assert_safe_for_llm, sanitize_for_llm
 from core.checks import check_expression, check_consistency, check_required
+from core.plain import check_plain, propose_plain
+from core.guide import check_goal_quality
 from core.merge import merge
 
 sample = {
@@ -39,6 +41,10 @@ if __name__ == "__main__":
     print("\n表現チェック:", check_expression(text_all) or "問題なし")
     print("整合性チェック:", check_consistency(sample) or "問題なし")
     print("必須チェック:", check_required(sample) or "問題なし")
+    print("やさしい日本語:", check_plain(text_all) or "問題なし")
+    print("目標の具体性:", check_goal_quality(sample["guidance_long_goal"]) or "問題なし")
+    clean, removed = sanitize_for_llm({**sample, "child_name": "山田 太郎"})
+    print("PII除去:", sorted(removed), "| child_name送信対象外:", "child_name" not in clean)
 
     for name in ("support_plan.txt", "guidance_plan.txt"):
         tpl = (BASE / "templates" / "mext" / name).read_text(encoding="utf-8")
