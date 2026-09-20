@@ -23,10 +23,12 @@ export default function PlanDetail() {
   useEffect(() => { load().catch(e => setMsg(e.message)); }, [id]);
 
   async function save() {
-    const j = await api(`/api/plans/${id}`, { method: "PUT", headers: authHeaders(),
-      body: JSON.stringify({ child_code: data.child_code || plan.child_code, grade: data.grade || plan.grade,
-        class_type: data.class_type || plan.class_type, school: plan.school, data }) });
-    setIssues(j.issues || []); setMsg(`保存。blocked=${j.blocked}`);
+    try {
+      const j = await api(`/api/plans/${id}`, { method: "PUT", headers: authHeaders(),
+        body: JSON.stringify({ child_code: data.child_code || plan.child_code, grade: data.grade || plan.grade,
+          class_type: data.class_type || plan.class_type, school: plan.school, data }) });
+      setIssues(j.issues || []); setMsg(`保存。blocked=${j.blocked}`);
+    } catch (e: any) { setMsg(`保存失敗: ${e.message}`); }
   }
   async function status(s: string) {
     try {
@@ -35,9 +37,11 @@ export default function PlanDetail() {
     } catch (e: any) { setMsg(`遷移失敗: ${e.message}`); }
   }
   async function draft() {
-    const j = await api(`/api/ai/draft`, { method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ kind: draftKind, plan_id: id }) });
-    setAi(j.text || JSON.stringify(j));
+    try {
+      const j = await api(`/api/ai/draft`, { method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ kind: draftKind, plan_id: id }) });
+      setAi(j.blocked ? `利用不可: ${JSON.stringify(j.issues || j).slice(0, 200)}` : (j.text || JSON.stringify(j)));
+    } catch (e: any) { setMsg(`下書き失敗: ${e.message}`); }
   }
   function applyDraft() {
     if (!ai) return;
@@ -45,10 +49,12 @@ export default function PlanDetail() {
     setMsg(`下書きを「${draftTarget}」に反映（要確認・修正）`);
   }
   async function polishField(k: string) {
-    const j = await api(`/api/ai/check`, { method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ facts: data[k] || "", plan_id: "" }) });
-    setPolish({ ...polish, [k]: j.proposal });
-    setIssues(j.issues || []);
+    try {
+      const j = await api(`/api/ai/check`, { method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ facts: data[k] || "", plan_id: "" }) });
+      setPolish({ ...polish, [k]: j.proposal });
+      setIssues(j.issues || []);
+    } catch (e: any) { setMsg(`推敲失敗: ${e.message}`); }
   }
   function applyPolish(k: string) {
     const p = polish[k];
@@ -57,9 +63,11 @@ export default function PlanDetail() {
     setMsg(`修正案を「${k}」に反映（要確認）`);
   }
   async function norishiro() {
-    const j = await api(`/api/ai/norishiro`, { method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ plan_id: id }) });
-    setNori(j.proposals || []);
+    try {
+      const j = await api(`/api/ai/norishiro`, { method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ plan_id: id }) });
+      setNori(j.proposals || []);
+    } catch (e: any) { setMsg(`提案失敗: ${e.message}`); }
   }
   function applyNori(p: any) {
     setData({ ...data, start_ease: ((data.start_ease || "") + "\n" + p.body).trim() });
@@ -75,9 +83,11 @@ export default function PlanDetail() {
     setMsg(`引継ぎ${fmt}を取得（要・保護者同意）`);
   }
   async function check() {
-    const j = await api(`/api/ai/check`, { method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ plan_id: id }) });
-    setIssues(j.issues || []); setMsg(`表現・やさしい日本語チェック ${j.issues?.length}件`);
+    try {
+      const j = await api(`/api/ai/check`, { method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ plan_id: id }) });
+      setIssues(j.issues || []); setMsg(`表現・やさしい日本語チェック ${j.issues?.length}件`);
+    } catch (e: any) { setMsg(`チェック失敗: ${e.message}`); }
   }
   if (!plan) return <p>{msg || "読込中"}</p>;
   const field = (k: string, label: string) => (
@@ -177,20 +187,23 @@ export default function PlanDetail() {
 function Comments({ id }: { id: string }) {
   const [rows, setRows] = useState<any[]>([]);
   const [body, setBody] = useState("");
+  const [emsg, setEmsg] = useState("");
   async function load() {
     try { setRows(await api(`/api/plans/${id}/comments`, { headers: authHeaders() })); } catch {}
   }
   useEffect(() => { load(); }, [id]);
   async function post() {
-    await api(`/api/plans/${id}/comments`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ body }) });
-    setBody(""); load();
+    try {
+      await api(`/api/plans/${id}/comments`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ body }) });
+      setBody(""); setEmsg(""); load();
+    } catch (e: any) { setEmsg(`投稿失敗: ${e.message}`); }
   }
   return (
     <div className="card noprint" style={{ marginTop: 12 }}>
       <h3>支援会議メモ（関係者共有用）</h3>
       <ul>{rows.map(r => <li key={r.id}><b>{r.author}</b>（{new Date(r.created_at * 1000).toLocaleString("ja-JP")}）：{r.body}</li>)}</ul>
       <textarea value={body} onChange={e => setBody(e.target.value)} rows={2} style={{ width: "100%" }} placeholder="申送り・相談内容（個人情報の書込み注意）" />
-      <div style={{ marginTop: 6 }}><button className="btn primary" onClick={post}>投稿</button></div>
+      <div style={{ marginTop: 6 }}><button className="btn primary" onClick={post}>投稿</button> <span className="muted">{emsg}</span></div>
     </div>
   );
 }

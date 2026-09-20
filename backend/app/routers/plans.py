@@ -27,6 +27,15 @@ class PlanBody(BaseModel):
     data: dict = {}
 
 
+def _check_size(body: PlanBody) -> None:
+    raw = json.dumps(body.data or {}, ensure_ascii=False)
+    if len(raw) > 500 * 1024:
+        raise HTTPException(400, "入力データが大きすぎます（500KB以内）")
+    for k in (body.child_code, body.school, body.grade, body.class_type):
+        if len(k or "") > 100:
+            raise HTTPException(400, "基本項目は100字以内にしてください")
+
+
 def _row_to_plan(r: dict) -> dict:
     d = dict(r)
     try:
@@ -62,6 +71,7 @@ def list_plans(user: dict = Depends(auth.current_user)):
 @router.post("")
 def create_plan(body: PlanBody, user: dict = Depends(auth.current_user)):
     auth.require_role(user, "admin", "manager", "teacher")
+    _check_size(body)
     if not body.child_code.strip():
         raise HTTPException(400, "child_code（管理番号）は必須。実名は入れないこと。")
     pid = uuid.uuid4().hex[:12]
@@ -92,6 +102,7 @@ def get_plan(pid: str, user: dict = Depends(auth.current_user)):
 @router.put("/{pid}")
 def update_plan(pid: str, body: PlanBody, user: dict = Depends(auth.current_user)):
     auth.require_role(user, "admin", "manager", "teacher")
+    _check_size(body)
     with db.conn() as c:
         r = c.execute("SELECT * FROM plans WHERE id=?", (pid,)).fetchone()
         if not r:

@@ -115,6 +115,9 @@ def save_mapping(tid: str, body: MappingBody, user: dict = Depends(auth.current_
 
 @router.post("/{tid}/merge")
 def merge_template(tid: str, body: MergeBody, user: dict = Depends(auth.current_user)):
+    auth.require_role(user, "admin", "manager", "teacher")
+    if len(body.mapping or {}) > 2000:
+        raise HTTPException(400, "マッピングが多すぎます（2000件以内）")
     data, mapping, suffix = _resolve(tid, body)
     issues = _validate(data)
     if any(i.get("level") == "error" for i in issues):
@@ -202,6 +205,7 @@ def template_pdf(tid: str, body: MergeBody, user: dict = Depends(auth.current_us
     """新潟様式のPDF直接生成。検証エラー時はブロック。"""
     from fastapi.responses import Response
     from app import pdfgen
+    auth.require_role(user, "admin", "manager", "teacher")
     if tid != "niigata01":
         raise HTTPException(400, "PDF直接生成は新潟様式（niigata01）のみ対応。他様式はExcel出力→印刷→PDFを利用してください。")
     data, _, _ = _resolve(tid, body)
@@ -219,6 +223,7 @@ def template_pdf(tid: str, body: MergeBody, user: dict = Depends(auth.current_us
 
 @router.get("/{tid}/file/{name}")
 def download(tid: str, name: str, user: dict = Depends(auth.current_user)):
+    auth.require_role(user, "admin", "manager", "teacher")
     safe = Path(name).name
     if safe != name or ".." in name or "/" in name or "\\" in name:
         raise HTTPException(400, "不正なファイル名")

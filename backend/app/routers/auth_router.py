@@ -43,6 +43,8 @@ def seed():
 
 @router.post("/login")
 def login(body: LoginBody, req: Request):
+    if len(body.username) > 200 or len(body.password) > 200:
+        raise HTTPException(400, "入力が長すぎます")
     _limited(f"login:{req.client.host if req.client else '?'}:{body.username}")
     u = auth.verify(body.username, body.password)
     if not u:

@@ -180,3 +180,31 @@ def test_merge_prunes_old_outputs():
         assert r.status_code == 200, r.text[:200]
         _t.sleep(0.05)
     assert len(list(p.glob('filled_*.xlsx'))) <= 3
+
+
+def test_viewer_blocked_and_input_caps():
+    sys.path.insert(0, str(BASE / 'backend'))
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app import auth as auth_mod
+    from app.seed_data import register_niigata
+    register_niigata()
+    auth_mod.ensure_user('v_viewer', 'v_viewer123', 'viewer', '')
+    auth_mod.ensure_user('v_teacher', 'v_teacher123', 'teacher', '')
+    cc = TestClient(app)
+    vt = cc.post('/api/auth/login', json={'username': 'v_viewer', 'password': 'v_viewer123'}).json()['token']
+    vh = {'Authorization': f'Bearer {vt}'}
+    tt = cc.post('/api/auth/login', json={'username': 'v_teacher', 'password': 'v_teacher123'}).json()['token']
+    th = {'Authorization': f'Bearer {tt}'}
+    pid = cc.post('/api/plans', json={'child_code': 'V-1', 'grade': '小4', 'class_type': '通級', 'data': {'profile_strengths': 'a'}}, headers=th).json()['id']
+    # viewerは出力系不可
+    assert cc.post('/api/templates/niigata01/merge', json={'plan_id': pid}, headers=vh).status_code == 403
+    assert cc.get('/api/templates/niigata01/file/original.xlsx', headers=vh).status_code == 403
+    assert cc.post('/api/templates/niigata01/pdf', json={'plan_id': pid}, headers=vh).status_code == 403
+    assert cc.get(f'/api/plans/{pid}/handover?format=csv', headers=vh).status_code == 403
+    # viewer閲覧は可
+    assert cc.get(f'/api/plans/{pid}', headers=vh).status_code == 200
+    # 入力上限
+    big = {'child_code': 'V-2', 'grade': '小4', 'class_type': '通級', 'data': {'x': 'y' * (600 * 1024)}}
+    assert cc.post('/api/plans', json=big, headers=th).status_code == 400
+    assert cc.post('/api/auth/login', json={'username': 'x' * 300, 'password': 'p'}).status_code == 400

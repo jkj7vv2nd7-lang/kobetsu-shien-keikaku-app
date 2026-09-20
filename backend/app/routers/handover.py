@@ -48,6 +48,7 @@ def _load(pid: str) -> tuple:
 
 @router.get("/{pid}/handover")
 def handover(pid: str, format: str = "csv", user: dict = Depends(auth.current_user)):
+    auth.require_role(user, "admin", "manager", "teacher")
     p, data = _load(pid)
     consent = bool(data.get("handover_consent")) or bool(data.get("guardian_confirmed"))
     if not consent:
