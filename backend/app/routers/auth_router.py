@@ -8,20 +8,11 @@ from app import auth, db
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # ログイン試行制限：5分間に10回まで（メモリ内・単一プロセス用）
-_ATTEMPTS: dict = {}
 LIMIT_N, LIMIT_WIN = 10, 300
 
 
 def _limited(key: str) -> None:
-    now = time.time()
-    lst = [t for t in _ATTEMPTS.get(key, []) if now - t < LIMIT_WIN]
-    if len(lst) >= LIMIT_N:
-        raise HTTPException(429, "試行回数超過。5分後に再試行してください。")
-    lst.append(now)
-    _ATTEMPTS[key] = lst
-    # メモリ肥大防止
-    if len(_ATTEMPTS) > 10000:
-        _ATTEMPTS.clear()
+    auth.limited(key, LIMIT_N, LIMIT_WIN)
 
 
 class LoginBody(BaseModel):

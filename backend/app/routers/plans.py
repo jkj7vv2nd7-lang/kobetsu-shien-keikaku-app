@@ -27,6 +27,24 @@ class PlanBody(BaseModel):
     data: dict = {}
 
 
+def can_access(user: dict, plan: dict) -> bool:
+    """計画の参照・操作可否（一覧の絞り込みと同一基準）。"""
+    if user["role"] in ("admin", "manager"):
+        return True
+    return plan.get("created_by") == user["username"] or (plan.get("school") or "") == (user.get("school") or "")
+
+
+def _get_plan_or_403(pid: str, user: dict) -> dict:
+    with db.conn() as c:
+        r = c.execute("SELECT * FROM plans WHERE id=?", (pid,)).fetchone()
+        if not r:
+            raise HTTPException(404, "plan not found")
+        p = dict(r)
+    if not can_access(user, p):
+        raise HTTPException(403, "参照権限がありません")
+    return p
+
+
 def _check_size(body: PlanBody) -> None:
     raw = json.dumps(body.data or {}, ensure_ascii=False)
     if len(raw) > 500 * 1024:
@@ -92,32 +110,26 @@ def create_plan(body: PlanBody, user: dict = Depends(auth.current_user)):
 
 @router.get("/{pid}")
 def get_plan(pid: str, user: dict = Depends(auth.current_user)):
-    with db.conn() as c:
-        r = c.execute("SELECT * FROM plans WHERE id=?", (pid,)).fetchone()
-        if not r:
-            raise HTTPException(404, "not found")
-        return _row_to_plan(dict(r))
+    return _row_to_plan(_get_plan_or_403(pid, user))
 
 
 @router.put("/{pid}")
 def update_plan(pid: str, body: PlanBody, user: dict = Depends(auth.current_user)):
     auth.require_role(user, "admin", "manager", "teacher")
     _check_size(body)
+    src = _get_plan_or_403(pid, user)
     with db.conn() as c:
-        r = c.execute("SELECT * FROM plans WHERE id=?", (pid,)).fetchone()
-        if not r:
-            raise HTTPException(404, "not found")
-        if dict(r)["status"] == "approved" and user["role"] not in ("admin", "manager"):
+        if src["status"] == "approved" and user["role"] not in ("admin", "manager"):
             raise HTTPException(403, "承認済みは管理職のみ修正可")
         full = dict(body.data or {})
-        full.update({"child_code": body.child_code or dict(r)["child_code"],
-                     "grade": body.grade or dict(r)["grade"],
-                     "class_type": body.class_type or dict(r)["class_type"]})
+        full.update({"child_code": body.child_code or src["child_code"],
+                     "grade": body.grade or src["grade"],
+                     "class_type": body.class_type or src["class_type"]})
         now = time.time()
         c.execute("""UPDATE plans SET child_code=?,school=?,grade=?,class_type=?,data_json=?,
                      updated_by=?,guardian_confirmed=?,guardian_date=?,updated_at=?,status=CASE WHEN status='approved' THEN 'review' ELSE status END
                      WHERE id=?""",
-                  (full["child_code"], body.school or dict(r)["school"], full["grade"], full["class_type"],
+                   (full["child_code"], body.school or src["school"], full["grade"], full["class_type"],
                    json.dumps(full, ensure_ascii=False), user["username"],
                    1 if full.get("guardian_confirmed") else 0, str(full.get("guardian_date", "")), now, pid))
     db.audit(user["username"], "plan.update", pid, full["child_code"])
@@ -126,12 +138,8 @@ def update_plan(pid: str, body: PlanBody, user: dict = Depends(auth.current_user
 
 @router.post("/{pid}/validate")
 def validate(pid: str, user: dict = Depends(auth.current_user)):
-    with db.conn() as c:
-        r = c.execute("SELECT * FROM plans WHERE id=?", (pid,)).fetchone()
-        if not r:
-            raise HTTPException(404, "not found")
-        data = json.loads(dict(r)["data_json"] or "{}")
-        return validate_plan(data)
+    p = _get_plan_or_403(pid, user)
+    return validate_plan(json.loads(p["data_json"] or "{}"))
 
 
 @router.post("/{pid}/status")
@@ -142,11 +150,9 @@ def set_status(pid: str, body: dict, user: dict = Depends(auth.current_user)):
         raise HTTPException(400, f"statusは {STATUSES}")
     if to == "approved":
         auth.require_role(user, "admin", "manager")
+    src = _get_plan_or_403(pid, user)
     with db.conn() as c:
-        r = c.execute("SELECT * FROM plans WHERE id=?", (pid,)).fetchone()
-        if not r:
-            raise HTTPException(404, "not found")
-        data = json.loads(dict(r)["data_json"] or "{}")
+        data = json.loads(src["data_json"] or "{}")
         v = validate_plan(data)
         if to in ("review", "approved") and v["blocked"]:
             raise HTTPException(400, f"検証エラーありのため{to}にできません")
@@ -162,6 +168,7 @@ class CommentBody(BaseModel):
 
 @router.get("/{pid}/comments")
 def list_comments(pid: str, user: dict = Depends(auth.current_user)):
+    _get_plan_or_403(pid, user)
     with db.conn() as c:
         rows = c.execute("SELECT id,plan_id,author,body,created_at FROM comments WHERE plan_id=? ORDER BY created_at",
                          (pid,)).fetchall()
@@ -175,9 +182,8 @@ def add_comment(pid: str, body: CommentBody, user: dict = Depends(auth.current_u
         raise HTTPException(400, "本文は必須です")
     if len(body.body) > 2000:
         raise HTTPException(400, "本文は2000字以内にしてください")
+    _get_plan_or_403(pid, user)
     with db.conn() as c:
-        if not c.execute("SELECT id FROM plans WHERE id=?", (pid,)).fetchone():
-            raise HTTPException(404, "plan not found")
         cid = uuid.uuid4().hex[:12]
         c.execute("INSERT INTO comments(id,plan_id,author,body,created_at) VALUES(?,?,?,?,?)",
                   (cid, pid, user["username"], body.body.strip(), time.time()))
@@ -189,11 +195,8 @@ def add_comment(pid: str, body: CommentBody, user: dict = Depends(auth.current_u
 def duplicate_plan(pid: str, user: dict = Depends(auth.current_user)):
     """年度更新用に複製。状態はdraft、保護者確認・引継ぎ同意はリセット、前年度IDを記録。"""
     auth.require_role(user, "admin", "manager", "teacher")
+    src = _get_plan_or_403(pid, user)
     with db.conn() as c:
-        r = c.execute("SELECT * FROM plans WHERE id=?", (pid,)).fetchone()
-        if not r:
-            raise HTTPException(404, "plan not found")
-        src = dict(r)
         data = json.loads(src["data_json"] or "{}")
         data["guardian_confirmed"] = False
         data["handover_consent"] = False

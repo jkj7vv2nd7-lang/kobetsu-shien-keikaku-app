@@ -15,6 +15,21 @@ from app import db
 ROLES = ("admin", "manager", "teacher", "viewer")
 TOKEN_TTL = 60 * 60 * 12
 
+# 簡易レート制限（メモリ内・単一プロセス用）
+_RATE: dict = {}
+
+
+def limited(key: str, n: int = 10, window: int = 300) -> None:
+    from fastapi import HTTPException as _HE
+    now = time.time()
+    lst = [t for t in _RATE.get(key, []) if now - t < window]
+    if len(lst) >= n:
+        raise _HE(429, "試行回数超過。しばらくして再試行してください。")
+    lst.append(now)
+    _RATE[key] = lst
+    if len(_RATE) > 10000:
+        _RATE.clear()
+
 
 # ---------- TOTP (RFC 6238, SHA1, 30秒, 6桁) ----------
 

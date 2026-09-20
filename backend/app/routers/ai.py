@@ -53,6 +53,7 @@ def _guard(body: AiBody):
 
 @router.post("/draft")
 def draft(body: AiBody, user: dict = Depends(auth.current_user)):
+    auth.limited(f"ai:{user['username']}", 30, 300)
     anon, problems = _guard(body)
     if problems:
         return {"blocked": True, "issues": problems}
@@ -67,6 +68,7 @@ def draft(body: AiBody, user: dict = Depends(auth.current_user)):
 
 @router.post("/check")
 def check(body: AiBody, user: dict = Depends(auth.current_user)):
+    auth.limited(f"ai:{user['username']}", 30, 300)
     anon, problems = _guard(body)
     if problems:
         return {"blocked": True, "issues": problems}
@@ -79,6 +81,7 @@ def check(body: AiBody, user: dict = Depends(auth.current_user)):
 @router.post("/summary")
 def summary(body: AiBody, user: dict = Depends(auth.current_user)):
     """引継ぎ要約：facts=前年度記録等。plan_id指定時は非PII項目から自動構成。"""
+    auth.limited(f"ai:{user['username']}", 30, 300)
     anon, problems = _guard(body)
     if problems:
         return {"blocked": True, "issues": problems}

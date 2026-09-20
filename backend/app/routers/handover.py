@@ -36,12 +36,9 @@ FIELDS = [
 ]
 
 
-def _load(pid: str) -> tuple:
-    with db.conn() as c:
-        r = c.execute("SELECT * FROM plans WHERE id=?", (pid,)).fetchone()
-        if not r:
-            raise HTTPException(404, "plan not found")
-        p = dict(r)
+def _load(pid: str, user: dict) -> tuple:
+    from app.routers.plans import _get_plan_or_403
+    p = _get_plan_or_403(pid, user)
     data = json.loads(p.get("data_json") or "{}")
     return p, data
 
@@ -49,7 +46,7 @@ def _load(pid: str) -> tuple:
 @router.get("/{pid}/handover")
 def handover(pid: str, format: str = "csv", user: dict = Depends(auth.current_user)):
     auth.require_role(user, "admin", "manager", "teacher")
-    p, data = _load(pid)
+    p, data = _load(pid, user)
     consent = bool(data.get("handover_consent")) or bool(data.get("guardian_confirmed"))
     if not consent:
         raise HTTPException(400, "引継ぎ出力には保護者の同意フラグ（引継ぎ同意または保護者確認）が必要です")

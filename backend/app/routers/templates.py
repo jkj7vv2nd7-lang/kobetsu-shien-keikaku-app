@@ -118,7 +118,7 @@ def merge_template(tid: str, body: MergeBody, user: dict = Depends(auth.current_
     auth.require_role(user, "admin", "manager", "teacher")
     if len(body.mapping or {}) > 2000:
         raise HTTPException(400, "マッピングが多すぎます（2000件以内）")
-    data, mapping, suffix = _resolve(tid, body)
+    data, mapping, suffix = _resolve(tid, body, user)
     issues = _validate(data)
     if any(i.get("level") == "error" for i in issues):
         raise HTTPException(400, {"message": "検証エラー", "issues": issues})
@@ -147,15 +147,15 @@ def merge_template(tid: str, body: MergeBody, user: dict = Depends(auth.current_
             "download": f"/api/templates/{tid}/file/{out.name}"}
 
 
-def _resolve(tid: str, body: MergeBody):
-    """plan/data・mapping・suffixを確定して返す。"""
+def _resolve(tid: str, body: MergeBody, user: dict | None = None):
+    """plan/data・mapping・suffixを確定して返す。plan_id指定時は参照権限も確認。"""
     data = dict(body.data or {})
     if body.plan_id:
-        with db.conn() as c:
-            r = c.execute("SELECT * FROM plans WHERE id=?", (body.plan_id,)).fetchone()
-            if not r:
-                raise HTTPException(404, "plan not found")
-            data = json.loads(dict(r)["data_json"] or "{}")
+        from app.routers.plans import _get_plan_or_403
+        if user is None:
+            raise HTTPException(401, "要ログイン")
+        p = _get_plan_or_403(body.plan_id, user)
+        data = json.loads(p["data_json"] or "{}")
     mapping = dict(body.mapping or {})
     with db.conn() as c:
         t = c.execute("SELECT * FROM templates WHERE id=?", (tid,)).fetchone()
@@ -177,7 +177,7 @@ def _validate(data: dict) -> list:
 @router.post("/{tid}/preview")
 def preview(tid: str, body: MergeBody, user: dict = Depends(auth.current_user)):
     """ファイルを作らず、slot→値の解決結果と不足を返す（差し込み前確認用）。"""
-    data, mapping, suffix = _resolve(tid, body)
+    data, mapping, suffix = _resolve(tid, body, user)
     f = _tdir(tid) / "slots.json"
     slots = json.loads(f.read_text(encoding="utf-8")) if f.exists() else []
     rows = []
@@ -195,6 +195,8 @@ def preview(tid: str, body: MergeBody, user: dict = Depends(auth.current_user)):
                      "empty": not (str(val).strip() if not isinstance(val, bool) else val)})
     unmapped = [s.get("slot_id") for s in slots if s.get("slot_id") not in mapping and not s.get("field_hint")]
     issues = _validate(data)
+    if body.plan_id:
+        db.audit(user["username"], "template.preview", tid, body.plan_id)
     return {"slots": rows, "unmapped": unmapped, "issues": issues,
             "blocked": any(i.get("level") == "error" for i in issues),
             "suffix": suffix}
@@ -208,7 +210,7 @@ def template_pdf(tid: str, body: MergeBody, user: dict = Depends(auth.current_us
     auth.require_role(user, "admin", "manager", "teacher")
     if tid != "niigata01":
         raise HTTPException(400, "PDF直接生成は新潟様式（niigata01）のみ対応。他様式はExcel出力→印刷→PDFを利用してください。")
-    data, _, _ = _resolve(tid, body)
+    data, _, _ = _resolve(tid, body, user)
     issues = _validate(data)
     if any(i.get("level") == "error" for i in issues):
         raise HTTPException(400, {"message": "検証エラー", "issues": issues})

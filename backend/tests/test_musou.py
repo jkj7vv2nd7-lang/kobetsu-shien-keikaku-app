@@ -38,6 +38,11 @@ def test_must_change_pw_flow():
     from app.main import app
     from app import auth as auth_mod
     auth_mod.ensure_user("m_fresh", "m_fresh123", "teacher", "")
+    with auth_mod.db.conn() as _c:
+        _r = _c.execute("SELECT id FROM users WHERE username='m_fresh'").fetchone()
+    auth_mod.set_password(dict(_r)["id"], "m_fresh123")
+    with auth_mod.db.conn() as _c2:
+        _c2.execute("UPDATE users SET must_change_pw=1 WHERE username='m_fresh'")
     cc = TestClient(app)
     t = cc.post("/api/auth/login", json={"username": "m_fresh", "password": "m_fresh123"}).json()
     assert t.get("must_change_pw") is True
@@ -208,3 +213,27 @@ def test_viewer_blocked_and_input_caps():
     big = {'child_code': 'V-2', 'grade': '小4', 'class_type': '通級', 'data': {'x': 'y' * (600 * 1024)}}
     assert cc.post('/api/plans', json=big, headers=th).status_code == 400
     assert cc.post('/api/auth/login', json={'username': 'x' * 300, 'password': 'p'}).status_code == 400
+
+
+def test_ownership_boundary():
+    sys.path.insert(0, str(BASE / 'backend'))
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app import auth as auth_mod
+    auth_mod.ensure_user('o_a', 'o_a1234567', 'teacher', '組A')
+    auth_mod.ensure_user('o_b', 'o_b1234567', 'teacher', '組B')
+    cc = TestClient(app)
+    ta = cc.post('/api/auth/login', json={'username': 'o_a', 'password': 'o_a1234567'}).json()['token']
+    tb = cc.post('/api/auth/login', json={'username': 'o_b', 'password': 'o_b1234567'}).json()['token']
+    ha, hb = {'Authorization': f'Bearer {ta}'}, {'Authorization': f'Bearer {tb}'}
+    full = {'child_code': 'O-1', 'grade': '小4', 'class_type': '通級', 'profile_strengths': 'a', 'profile_needs': 'b', 'guardian_wish': 'c', 'support_long_goal': 'd', 'guidance_long_goal': 'e', 'short_goal_1': 'f', 'supports': 'g', 'eval_method': 'h', 'guardian_confirmed': True}
+    pid = cc.post('/api/plans', json={'child_code': 'O-1', 'grade': '小4', 'class_type': '通級', 'school': '組A', 'data': full}, headers=ha).json()['id']
+    # Bからは参照・更新・状態・コメント・差し込み参照すべて403
+    assert cc.get(f'/api/plans/{pid}', headers=hb).status_code == 403
+    assert cc.put(f'/api/plans/{pid}', json={'child_code': 'O-1', 'data': full}, headers=hb).status_code == 403
+    assert cc.post(f'/api/plans/{pid}/status', json={'status': 'review'}, headers=hb).status_code == 403
+    assert cc.get(f'/api/plans/{pid}/comments', headers=hb).status_code == 403
+    assert cc.post('/api/templates/niigata01/preview', json={'plan_id': pid}, headers=hb).status_code == 403
+    assert cc.get(f'/api/plans/{pid}/handover?format=csv', headers=hb).status_code == 403
+    # A本人は可
+    assert cc.get(f'/api/plans/{pid}', headers=ha).status_code == 200
