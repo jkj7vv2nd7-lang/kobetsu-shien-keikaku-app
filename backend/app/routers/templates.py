@@ -132,6 +132,13 @@ def merge_template(tid: str, body: MergeBody, user: dict = Depends(auth.current_
             template_engine.merge_xlsx(src, str(out), data, mapping)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    # 古い出力物の整理（最新3件を保持）
+    try:
+        olds = sorted(_tdir(tid).glob(f"filled_*{suffix}"), key=lambda p: p.stat().st_mtime)
+        for old in olds[:-3]:
+            old.unlink(missing_ok=True)
+    except Exception:
+        pass
     db.audit(user["username"], "template.merge", tid, out.name)
     return {"blocked": False, "issues": issues, "output": out.name,
             "download": f"/api/templates/{tid}/file/{out.name}"}

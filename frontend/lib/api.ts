@@ -10,6 +10,10 @@ export function authHeaders(): Record<string, string> {
 }
 export async function api(path: string, init?: RequestInit) {
   const r = await fetch(`${API}${path}`, init);
+  if (r.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    localStorage.removeItem("token");
+    window.location.href = "/login";
+  }
   if (!r.ok) {
     const t = await r.text();
     throw new Error(`${r.status}: ${t.slice(0, 300)}`);

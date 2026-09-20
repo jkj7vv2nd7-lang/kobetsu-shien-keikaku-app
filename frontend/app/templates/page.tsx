@@ -43,8 +43,10 @@ export default function Templates() {
     setMapping(m); setMsg(`候補を${n}件自動割当（要確認）`);
   }
   async function saveMapping() {
-    await api(`/api/templates/${tid}/mapping`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ mapping }) });
-    setMsg("マッピング保存");
+    try {
+      await api(`/api/templates/${tid}/mapping`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ mapping }) });
+      setMsg("マッピング保存");
+    } catch (e: any) { setMsg(`保存失敗: ${e.message}`); }
   }
   async function doPreview() {
     try {

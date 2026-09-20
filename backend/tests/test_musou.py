@@ -159,3 +159,24 @@ def test_logout_csvupload_guards():
     hh2 = {'Authorization': f'Bearer {t2}'}
     r = cc.post('/api/templates/upload', files={'file': ('x.xlsx', _io.BytesIO(b'not a zip'))}, headers=hh2)
     assert r.status_code == 400, r.status_code
+
+
+def test_merge_prunes_old_outputs():
+    sys.path.insert(0, str(BASE / 'backend'))
+    import time as _t
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app import auth as auth_mod
+    from app.seed_data import register_niigata
+    register_niigata()
+    auth_mod.ensure_user('p_user', 'p_user123', 'teacher', '')
+    cc = TestClient(app)
+    t = cc.post('/api/auth/login', json={'username': 'p_user', 'password': 'p_user123'}).json()['token']
+    hh = {'Authorization': f'Bearer {t}'}
+    p = __import__('pathlib').Path('backend/data/templates/niigata01')
+    data = {'child_code': 'P-1', 'grade': '小4', 'class_type': '通級', 'profile_strengths': 'a', 'profile_needs': 'b', 'guardian_wish': 'c', 'support_long_goal': 'd', 'guidance_long_goal': 'e', 'short_goal_1': 'f', 'supports': 'g', 'eval_method': 'h', 'guardian_confirmed': True}
+    for _ in range(4):
+        r = cc.post('/api/templates/niigata01/merge', json={'data': data}, headers=hh)
+        assert r.status_code == 200, r.text[:200]
+        _t.sleep(0.05)
+    assert len(list(p.glob('filled_*.xlsx'))) <= 3
