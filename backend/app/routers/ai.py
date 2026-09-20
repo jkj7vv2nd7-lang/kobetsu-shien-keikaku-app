@@ -9,7 +9,7 @@ from app.core import llm
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
-from core.anonymize import anonymize, assert_safe_for_llm, sanitize_for_llm, scrub_text  # noqa: E402
+from core.anonymize import anonymize, assert_safe_for_llm, sanitize_for_llm, scrub_text, detect_pii_patterns  # noqa: E402
 from core.checks import check_expression, check_consistency  # noqa: E402
 from core.plain import check_plain, propose_plain  # noqa: E402
 from core.guide import check_goal_quality, SUMMARY_FORMAT  # noqa: E402
@@ -47,6 +47,9 @@ def _guard(body: AiBody):
     anon = anonymize(facts, child_name=body.child_name, school_name=body.school_name)
     text = scrub_text(anon.text, secrets + [body.child_name, body.school_name])
     problems = assert_safe_for_llm(text, [body.child_name, body.school_name])
+    hits = detect_pii_patterns(text)
+    if hits:
+        problems = problems + [f"電話番号・住所等の個人情報（{ '・'.join(hits)}）が含まれています。除去してください"]
     anon.text = text
     return anon, problems
 

@@ -12,7 +12,7 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```powershell
 python backend/backup.py backup
 ```
-`backend/backups/backup_YYYYMMDD_HHMMSS.zip` に保存。外部媒体へ複写すること。
+`backend/backups/backup_YYYYMMDD_HHMMSS.zip` に保存。外部媒体へ複写すること（個人情報を含むため暗号化USB・暗号化保管を推奨）。
 復元（現行dataは自動退避）：
 ```powershell
 python backend/backup.py restore backend/backups/<file>.zip --force

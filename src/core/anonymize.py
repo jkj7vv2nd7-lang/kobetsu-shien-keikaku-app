@@ -42,14 +42,27 @@ def anonymize(text: str, child_name: str = "", school_name: str = "") -> Anonymi
 
 
 def assert_safe_for_llm(text: str, real_names: list) -> list:
-    """LLM送信直前チェック。実名残存があれば警告リストを返す。"""
+    """LLM送信直前チェック。実名残存があれば警告リストを返す（頭文字も出さない）。"""
     issues = []
     for n in real_names:
         if n and n in text:
-            issues.append(f"実名残存: {n[:1]}*** を除去してください")
+            issues.append("入力文中に個人を特定できる名前が残っています。除去してください")
     if "{{" in text and "}}" in text:
         pass  # テンプレ変数は許容
     return issues
+
+
+# 自由記述に紛れがちなPIIパターン（見つかれば送信ブロック）
+PII_PATTERNS = {
+    "電話番号": re.compile(r"\d{2,4}-\d{2,4}-\d{3,4}"),
+    "住所": re.compile(r"(?:都|道|府|県)?[^，。、\n]{0,10}(市|区|町|村)[^，。、\n]{0,15}\d+[^，。、\n]{0,8}(丁目|番地|号|番|-|‐|ー|－)"),
+    "メールアドレス": re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
+}
+
+
+def detect_pii_patterns(text: str) -> list:
+    """パターンに一致したPII種別のリストを返す。"""
+    return [label for label, rx in PII_PATTERNS.items() if rx.search(text or "")]
 
 
 def sanitize_for_llm(data: dict) -> tuple:

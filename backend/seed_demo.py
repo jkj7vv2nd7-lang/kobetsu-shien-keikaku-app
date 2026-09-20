@@ -69,6 +69,10 @@ DEMOS = [
 def create_demo_plans() -> list:
     db.init_db()
     auth.seed()
+    with db.conn() as c:
+        others = c.execute("SELECT COUNT(*) AS n FROM plans WHERE child_code NOT LIKE 'DEMO-%'").fetchone()
+        if dict(others)["n"] > 0:
+            raise RuntimeError("実データが存在するためデモ投入を中止します（空DBでのみ実行可）")
     ids = []
     with db.conn() as c:
         for code, grade, ctype, data in DEMOS:
