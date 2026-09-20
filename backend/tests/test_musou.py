@@ -112,3 +112,26 @@ def test_backup_roundtrip():
     names = zipfile.ZipFile(z).namelist()
     assert any("app.db" in n for n in names)
     shutil.rmtree(d, ignore_errors=True)
+
+
+def test_robust_merge_details(tmp_path):
+    from openpyxl import Workbook
+    from app.core import template_engine
+    # アンダースコア付きシート名・数字セル保護
+    p = tmp_path / 'u.xlsx'
+    wb = Workbook(); ws = wb.active; ws.title = 'Sheet_A'
+    ws['A1'] = '長期目標'; ws['B1'] = None; ws['C1'] = '4'
+    wb.save(p)
+    out = tmp_path / 'o.xlsx'
+    template_engine.merge_xlsx(str(p), str(out), {'guidance_long_goal': '切替を行う'}, {'xlsx_Sheet_A_B1': 'guidance_long_goal', 'xlsx_Sheet_A_C1': 'guidance_long_goal'})
+    from openpyxl import load_workbook
+    r = load_workbook(out)['Sheet_A']
+    assert r['B1'].value == '切替を行う'
+    assert r['C1'].value == '4'
+    # 日付定型セルは置換される
+    p2 = tmp_path / 'd.xlsx'
+    wb2 = Workbook(); ws2 = wb2.active; ws2['A1'] = '　　　　年　　月　　日'
+    wb2.save(p2)
+    out2 = tmp_path / 'd2.xlsx'
+    template_engine.merge_xlsx(str(p2), str(out2), {'written_date': '令和8年4月'}, {'xlsx_Sheet_A1': 'written_date'})
+    assert load_workbook(out2).active['A1'].value == '令和8年4月'

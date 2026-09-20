@@ -103,6 +103,14 @@ export default function PlanDetail() {
     <main>
       <h2>計画 {plan.child_code}（{plan.status}）</h2>
       <p>{msg}</p>
+      <div className="card">
+        <h3>基本情報</h3>
+        {[["child_code", "管理番号"], ["grade", "学年"], ["class_type", "在籍形態"]].map(([k, label]) => (
+          <span key={k} style={{ marginRight: 12 }}>{label}：
+            <input value={data[k] ?? plan[k] ?? ""} onChange={e => setData({ ...data, [k]: e.target.value })} style={{ width: 140 }} />
+          </span>
+        ))}
+      </div>
       <p style={{ fontSize: 13, color: "#555" }}>［個人情報］印の項目は印刷時のみ使用し、AIには送信されません。文章は短い文・ですます調で（保存時に自動チェック）。</p>
       <h3>基本・文科省項目</h3>
       {FIELDS.slice(0, 17).map(([k, label]) => field(k, label))}

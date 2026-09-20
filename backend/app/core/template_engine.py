@@ -130,6 +130,8 @@ def _is_writable_form_cell(cur) -> bool:
     if BLANK.search(cur) or PLACEHOLDER.search(cur):
         return True
     s = cur.strip()
+    if s.isdigit():
+        return False  # 数字のみの実データは保護
     return len(s) <= 20 and bool(FORM_BLANK.match(s))
 
 
@@ -160,12 +162,16 @@ def merge_xlsx(src: str, dest: str, data: dict, mapping: dict) -> None:
     # 1) 明示マッピングを優先適用
     for slot_id, spec in mapping.items():
         # slot_id形式 xlsx_{sheet}_{cell} / xlsx_{sheet}_{cell}_{field}
-        parts = slot_id.split("_", 2)
-        if len(parts) < 3 or parts[0] != "xlsx":
+        # シート名に"_"を含む場合に備え、既知シート名で前方一致させる
+        if not slot_id.startswith("xlsx_"):
             continue
-        sheet, rest = parts[1], parts[2]
+        rest_all = slot_id[len("xlsx_"):]
+        sheet = next((sn for sn in wb.sheetnames if rest_all == sn or rest_all.startswith(sn + "_")), None)
+        if sheet is None:
+            continue
+        rest = rest_all[len(sheet) + 1:] if rest_all != sheet else ""
         cell = rest.split("_")[0]  # B5 等（後ろにfield名が付く場合あり）
-        if sheet not in wb.sheetnames:
+        if not cell:
             continue
         if isinstance(spec, dict):
             field_id, mode = spec.get("field", ""), spec.get("mode", "replace")

@@ -30,6 +30,12 @@ def _tdir(tid: str) -> Path:
     return TDATA / tid
 
 
+def _safe_name(value: str, fallback: str = "out") -> str:
+    import re as _re
+    s = _re.sub(r"[^A-Za-z0-9_-]+", "_", (value or "").strip())[:40].strip("_")
+    return s or fallback
+
+
 class MappingBody(BaseModel):
     mapping: dict
     label: str = ""
@@ -111,7 +117,8 @@ def merge_template(tid: str, body: MergeBody, user: dict = Depends(auth.current_
     if any(i.get("level") == "error" for i in issues):
         raise HTTPException(400, {"message": "検証エラー", "issues": issues})
     src = str(_tdir(tid) / f"original{suffix}")
-    out = _tdir(tid) / f"filled_{data.get('child_code', 'out')}{suffix}"
+    import uuid as _uuid
+    out = _tdir(tid) / f"filled_{_safe_name(str(data.get('child_code', '')))}_{_uuid.uuid4().hex[:6]}{suffix}"
     try:
         if suffix == ".txt":
             tpl = Path(src).read_text(encoding="utf-8")
@@ -197,7 +204,7 @@ def template_pdf(tid: str, body: MergeBody, user: dict = Depends(auth.current_us
         raise HTTPException(500, str(e))
     db.audit(user["username"], "template.pdf", tid, str(data.get("child_code", "")))
     return Response(content=blob, media_type="application/pdf",
-                    headers={"Content-Disposition": f"attachment; filename=niigata_{data.get('child_code', 'out')}.pdf"})
+                    headers={"Content-Disposition": f"attachment; filename=niigata_{_safe_name(str(data.get('child_code', '')))}.pdf"})
 
 
 @router.get("/{tid}/file/{name}")

@@ -69,5 +69,7 @@ def handover(pid: str, format: str = "csv", user: dict = Depends(auth.current_us
     else:
         raise HTTPException(400, "formatは csv|json")
     db.audit(user["username"], "plan.handover", pid, f"format={format}")
+    import re as _re
+    safe = _re.sub(r"[^A-Za-z0-9_-]+", "_", str(p.get("child_code", "")).strip())[:40].strip("_") or "out"
     return Response(content=payload, media_type=media,
-                    headers={"Content-Disposition": f"attachment; filename=handover_{p['child_code']}.{ext}"})
+                    headers={"Content-Disposition": f"attachment; filename=handover_{safe}.{ext}"})
