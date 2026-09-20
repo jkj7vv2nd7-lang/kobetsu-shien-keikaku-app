@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { API, api, authHeaders } from "../../../lib/api";
-import { FIELDS, PII, TABLE_FIELDS, HANDOVER_FIELDS } from "../../../lib/fields";
+import { FIELDS, PII, TABLE_FIELDS, HANDOVER_FIELDS, REVIEW_FIELDS } from "../../../lib/fields";
 
 export default function PlanDetail() {
   const { id } = useParams() as { id: string };
@@ -136,6 +136,8 @@ export default function PlanDetail() {
       <h3>引継ぎ・同意（進学・進級時）</h3>
       <p style={{ fontSize: 13, color: "#555" }}>引継ぎ先への情報提供は保護者の同意が前提です（ハンドブックp21）。</p>
       {HANDOVER_FIELDS.map(([k, label]) => field(k, label))}
+      <h3>見直し予定</h3>
+      {REVIEW_FIELDS.map(([k, label]) => field(k, label))}
       <label><input type="checkbox" checked={!!data.guardian_confirmed}
         onChange={e => setData({ ...data, guardian_confirmed: e.target.checked })} /> 保護者確認済み</label>
       <div style={{ marginTop: 12 }} className="noprint">
@@ -180,6 +182,7 @@ export default function PlanDetail() {
       </div>
       <ul>{issues.map((i, n) => <li key={n}>[{i.level}/{i.rule}] {i.msg || i.hit}</li>)}</ul>
       <Comments id={id} />
+      <Records id={id} />
     </main>
   );
 }
@@ -204,6 +207,35 @@ function Comments({ id }: { id: string }) {
       <ul>{rows.map(r => <li key={r.id}><b>{r.author}</b>（{new Date(r.created_at * 1000).toLocaleString("ja-JP")}）：{r.body}</li>)}</ul>
       <textarea value={body} onChange={e => setBody(e.target.value)} rows={2} style={{ width: "100%" }} placeholder="申送り・相談内容（個人情報の書込み注意）" />
       <div style={{ marginTop: 6 }}><button className="btn primary" onClick={post}>投稿</button> <span className="muted">{emsg}</span></div>
+    </div>
+  );
+}
+
+function Records({ id }: { id: string }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [date, setDate] = useState("");
+  const [goal, setGoal] = useState("");
+  const [body, setBody] = useState("");
+  const [emsg, setEmsg] = useState("");
+  async function load() {
+    try { setRows(await api(`/api/plans/${id}/records`, { headers: authHeaders() })); } catch {}
+  }
+  useEffect(() => { load(); }, [id]);
+  async function post() {
+    try {
+      await api(`/api/plans/${id}/records`, { method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ date, goal_ref: goal, body }) });
+      setDate(""); setGoal(""); setBody(""); setEmsg(""); load();
+    } catch (e: any) { setEmsg(`記録失敗: ${e.message}`); }
+  }
+  return (
+    <div className="card noprint" style={{ marginTop: 12 }}>
+      <h3>日々の指導記録（目標と紐付け・評価の積み重ね）</h3>
+      <ul>{rows.map(r => <li key={r.id}>{r.date}［{r.goal_ref || "目標共通"}］{r.body}（{r.author}）</li>)}</ul>
+      <input value={date} onChange={e => setDate(e.target.value)} placeholder="日付 YYYY-MM-DD" style={{ width: 160 }} />
+      <input value={goal} onChange={e => setGoal(e.target.value)} placeholder="関連目標（例：短期目標1）" style={{ marginLeft: 8, width: 220 }} />
+      <textarea value={body} onChange={e => setBody(e.target.value)} rows={2} style={{ width: "100%", marginTop: 6 }} placeholder="できたこと・兆し・工夫（個人内評価の視点で）" />
+      <div style={{ marginTop: 6 }}><button className="btn primary" onClick={post}>記録</button> <span className="muted">{emsg}</span></div>
     </div>
   );
 }

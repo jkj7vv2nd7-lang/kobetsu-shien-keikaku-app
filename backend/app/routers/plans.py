@@ -166,6 +166,12 @@ class CommentBody(BaseModel):
     body: str = ""
 
 
+class RecordBody(BaseModel):
+    date: str = ""
+    goal_ref: str = ""
+    body: str = ""
+
+
 @router.get("/{pid}/comments")
 def list_comments(pid: str, user: dict = Depends(auth.current_user)):
     _get_plan_or_403(pid, user)
@@ -217,3 +223,35 @@ def duplicate_plan(pid: str, user: dict = Depends(auth.current_user)):
                       (uuid.uuid4().hex[:12], nid, d["author"], d["body"], d["created_at"]))
     db.audit(user["username"], "plan.duplicate", nid, f"from={pid}")
     return {"id": nid, "from": pid}
+
+
+@router.get("/{pid}/records")
+def list_records(pid: str, user: dict = Depends(auth.current_user)):
+    """日々の指導記録（目標紐付け）の一覧。"""
+    _get_plan_or_403(pid, user)
+    with db.conn() as c:
+        rows = c.execute("SELECT id,plan_id,author,date,goal_ref,body,created_at FROM records WHERE plan_id=? ORDER BY date DESC, created_at DESC LIMIT 500", (pid,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+@router.post("/{pid}/records")
+def add_record(pid: str, body: RecordBody, user: dict = Depends(auth.current_user)):
+    _get_plan_or_403(pid, user)
+    auth.require_role(user, "admin", "manager", "teacher")
+    if not body.body.strip():
+        raise HTTPException(400, "本文は必須です")
+    if len(body.body) > 2000:
+        raise HTTPException(400, "本文は2000字以内にしてください")
+    import datetime as _dt
+    d = (body.date or "").strip()
+    if d:
+        try:
+            _dt.date.fromisoformat(d.replace("/", "-"))
+        except ValueError:
+            raise HTTPException(400, "日付はYYYY-MM-DD形式にしてください")
+    with db.conn() as c:
+        rid = uuid.uuid4().hex[:12]
+        c.execute("INSERT INTO records(id,plan_id,author,date,goal_ref,body,created_at) VALUES(?,?,?,?,?,?,?)",
+                  (rid, pid, user["username"], d, (body.goal_ref or "")[:100], body.body.strip(), time.time()))
+    db.audit(user["username"], "plan.record", pid, d)
+    return {"id": rid}

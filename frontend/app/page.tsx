@@ -34,6 +34,15 @@ export default function Home() {
       ) : (
         <div className="card"><a href="/login">ログイン</a>すると進捗が表示されます（teacher/teacher123 等）。</div>
       )}
+      {s && ((s.overdue?.length > 0 || s.due_soon?.length > 0)) && (
+        <div className="card">
+          <h3>見直しアラート</h3>
+          {s.overdue?.length > 0 && (<p className="issue-err">期限切れ：{s.overdue.map((p: any) => (
+            <span key={p.id}><a href={`/plans/${p.id}`}>{p.child_code}</a>（{p.next_review_date}） </span>))}</p>)}
+          {s.due_soon?.length > 0 && (<p className="issue-warn">30日以内：{s.due_soon.map((p: any) => (
+            <span key={p.id}><a href={`/plans/${p.id}`}>{p.child_code}</a>（{p.next_review_date}） </span>))}</p>)}
+        </div>
+      )}
       <div className="card">
         <h3>手順</h3>
         <ol>

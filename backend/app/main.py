@@ -94,6 +94,11 @@ def stats_summary(user: dict = Depends(auth.current_user)):
         items = [dict(r) for r in rows]
     by_status: dict = {}
     blocked = 0
+    overdue: list = []
+    due_soon: list = []
+    no_date = 0
+    import datetime as _dt
+    today = _dt.date.today()
     for p in items:
         by_status[p.get("status", "draft")] = by_status.get(p.get("status", "draft"), 0) + 1
         try:
@@ -102,6 +107,21 @@ def stats_summary(user: dict = Depends(auth.current_user)):
                 blocked += 1
         except Exception:
             blocked += 1
+            continue
+        rv = str(data.get("next_review_date", "") or "").strip().replace("/", "-")
+        if not rv:
+            no_date += 1
+            continue
+        try:
+            rd = _dt.date.fromisoformat(rv)
+        except ValueError:
+            continue
+        info = {"id": p["id"], "child_code": p["child_code"], "next_review_date": rv}
+        if rd < today:
+            overdue.append(info)
+        elif (rd - today).days <= 30:
+            due_soon.append(info)
     recent = [{"id": p["id"], "child_code": p["child_code"], "grade": p["grade"],
                "status": p["status"], "updated_at": p["updated_at"]} for p in items[:10]]
-    return {"total": len(items), "by_status": by_status, "blocked": blocked, "recent": recent}
+    return {"total": len(items), "by_status": by_status, "blocked": blocked, "recent": recent,
+            "overdue": overdue, "due_soon": due_soon, "no_review_date": no_date}

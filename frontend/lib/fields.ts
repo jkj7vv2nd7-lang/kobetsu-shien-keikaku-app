@@ -32,6 +32,10 @@ export const HANDOVER_FIELDS = [
   ["effective_supports", "有効だった工夫と条件"], ["episode", "対応エピソード"],
 ] as const;
 
+export const REVIEW_FIELDS = [
+  ["next_review_date", "次回見直し日（YYYY-MM-DD）"],
+] as const;
+
 export const TABLE_FIELDS = (n: number) => [
   [`fact_${n}`, `実態${n}`], [`goal_${n}`, `目標${n}`],
   [`method_${n}`, `指導支援方法${n}`], [`eval_${n}`, `評価${n}`],
