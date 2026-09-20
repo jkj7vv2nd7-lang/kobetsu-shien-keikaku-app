@@ -1,0 +1,19 @@
+:root { --navy: #1a3a5f; --bg: #f6f7f9; --card: #fff; --line: #e2e6ec; --ok: #1a7f4b; --warn: #b7791f; --err: #c0392b; --info: #2c6cb5; }
+body { color: #222; }
+a { color: var(--info); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; color: #fff; }
+.badge.draft { background: #7f8c9b; } .badge.review { background: var(--warn); } .badge.approved { background: var(--ok); }
+.btn { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+.btn.primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+.btn + .btn { margin-left: 8px; }
+.btn:disabled { opacity: .5; cursor: default; }
+table.grid { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.grid th, table.grid td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+table.grid th { background: #eef2f7; }
+.issue-err { color: var(--err); } .issue-warn { color: var(--warn); } .issue-info { color: var(--info); }
+textarea { border: 1px solid #c9d2dd; border-radius: 6px; padding: 6px; font-size: 14px; }
+input, select { border: 1px solid #c9d2dd; border-radius: 6px; padding: 6px; font-size: 14px; }
+pre.ai { background: #eef4ff; padding: 10px; border-radius: 8px; white-space: pre-wrap; }
+.muted { color: #666; font-size: 13px; }
+@media print { nav, .noprint { display: none !important; } body { background: #fff !important; } textarea { border: 1px solid #999; } .card { border: none; padding: 0; } }

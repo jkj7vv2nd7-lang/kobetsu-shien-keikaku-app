@@ -1,0 +1,11 @@
+個別の指導計画（文科省ベース・試作 v0.1）
+====================================
+管理番号：{{child_code}}／学年：{{grade}}／在籍：{{class_type}}
+
+【実態把握】得意：{{profile_strengths}}／配慮：{{profile_needs}}
+【長期目標（1年）】{{guidance_long_goal}}
+【短期目標1】{{short_goal_1}}
+【短期目標2】{{short_goal_2}}
+【具体的支援・手立て】{{supports}}
+【評価方法・時期】{{eval_method}}
+【保護者確認】{{guardian_confirmed}}

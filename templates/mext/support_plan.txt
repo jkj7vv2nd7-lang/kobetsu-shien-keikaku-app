@@ -1,0 +1,15 @@
+個別の教育支援計画（文科省参考様式ベース・試作 v0.1）
+================================================
+管理番号：{{child_code}}／学年：{{grade}}／在籍：{{class_type}}
+
+【プロフィール：好き・得意】{{profile_strengths}}
+【プロフィール：苦手・配慮点】{{profile_needs}}
+【本人の願い】{{child_wish}}
+【保護者の願い】{{guardian_wish}}
+【これまでの支援】{{support_history}}
+【関係機関】{{related_agencies}}
+
+【長期目標（3年目安）】{{support_long_goal}}
+【評価方法・時期】{{eval_method}}
+【会議・面談記録】{{conference_memo}}
+【保護者確認】{{guardian_confirmed}}
