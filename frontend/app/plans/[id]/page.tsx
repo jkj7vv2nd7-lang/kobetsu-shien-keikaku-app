@@ -101,7 +101,7 @@ export default function PlanDetail() {
   );
   return (
     <main>
-      <h2>計画 {plan.child_code}（{plan.status}）</h2>
+      <h2>計画 {plan.child_code} <span className={`badge ${plan.status}`}>{plan.status}</span></h2>
       <p>{msg}</p>
       <div className="card">
         <h3>基本情報</h3>

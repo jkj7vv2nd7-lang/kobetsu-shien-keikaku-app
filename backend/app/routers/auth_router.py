@@ -1,7 +1,7 @@
 """認証API v0.4（MFA対応）"""
 import secrets
 import time
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from app import auth, db
 
@@ -95,6 +95,16 @@ def mfa_disable(body: MfaBody, user: dict = Depends(auth.current_user)):
     with db.conn() as c:
         c.execute("UPDATE users SET totp_secret='' WHERE username=?", (body.username,))
     db.audit(user["username"], "auth.mfa_disable", body.username, "")
+    return {"ok": True}
+
+
+@router.post("/logout")
+def logout(authorization: str | None = Header(default=None), user: dict = Depends(auth.current_user)):
+    if authorization and authorization.lower().startswith("bearer "):
+        tok = authorization.split(None, 1)[1]
+        with db.conn() as c:
+            c.execute("DELETE FROM sessions WHERE token=?", (tok,))
+    db.audit(user["username"], "auth.logout", "", "")
     return {"ok": True}
 
 

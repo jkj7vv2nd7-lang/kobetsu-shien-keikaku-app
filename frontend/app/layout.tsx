@@ -1,4 +1,5 @@
 import "./globals.css";
+import LogoutButton from "./logout-button";
 
 export const viewport = { width: "device-width", initialScale: 1 };
 
@@ -12,6 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <a href="/templates" style={{ color: "#cfe0f5", marginRight: 12 }}>様式・差し込み</a>
           <a href="/audit" style={{ color: "#cfe0f5", marginRight: 12 }}>監査</a>
           <a href="/login" style={{ color: "#cfe0f5" }}>ログイン</a>
+          <LogoutButton />
         </nav>
         <div style={{ maxWidth: 960, margin: "0 auto", padding: 16 }}>{children}</div>
       </body>

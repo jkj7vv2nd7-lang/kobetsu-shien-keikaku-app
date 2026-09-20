@@ -16,6 +16,14 @@ from app import db, auth
 
 router = APIRouter(prefix="/api/plans", tags=["handover"])
 
+
+def csv_safe(value) -> str:
+    """CSVインジェクション対策：数式起動文字は'を前置きする。"""
+    s = "" if value is None else str(value)
+    if s[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
 FIELDS = [
     ("child_code", "管理番号"), ("grade", "学年"), ("class_type", "在籍形態"),
     ("history", "生育歴・療育教育歴"), ("life", "生活の様子"), ("wish", "願い・希望"),
@@ -62,7 +70,7 @@ def handover(pid: str, format: str = "csv", user: dict = Depends(auth.current_us
         w.writerow(["項目", "内容"])
         for key, label in FIELDS:
             v = data.get(key, p.get(key, ""))
-            w.writerow([label, "" if v is None else str(v)])
+            w.writerow([label, csv_safe(v)])
         payload = "\ufeff".encode("utf-8") + buf.getvalue().encode("utf-8")
         media = "text/csv"
         ext = "csv"

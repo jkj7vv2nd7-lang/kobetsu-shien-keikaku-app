@@ -5,6 +5,7 @@ import { api, authHeaders } from "../../lib/api";
 export default function Plans() {
   const [plans, setPlans] = useState<any[]>([]);
   const [msg, setMsg] = useState("");
+  const [filter, setFilter] = useState("");
   const [form, setForm] = useState({ child_code: "S-2026-001", grade: "小4", class_type: "特別支援学級", school: "" });
   async function load() {
     try { setPlans(await api("/api/plans", { headers: authHeaders() })); setMsg(""); }
@@ -39,8 +40,15 @@ export default function Plans() {
         <button className="btn primary" onClick={create}>新規作成</button>
       </div>
       <div className="card">
-        <table className="grid"><thead><tr><th>管理番号</th><th>学年</th><th>状態</th><th></th></tr></thead>
-          <tbody>{plans.map(p => <tr key={p.id}>
+        絞り込み：
+        <select value={filter} onChange={e => setFilter(e.target.value)}>
+          <option value="">すべて</option>
+          <option value="draft">下書き</option>
+          <option value="review">提出中</option>
+          <option value="approved">承認済</option>
+        </select>
+        <table className="grid" style={{ marginTop: 8 }}><thead><tr><th>管理番号</th><th>学年</th><th>状態</th><th></th></tr></thead>
+          <tbody>{plans.filter(p => !filter || p.status === filter).map(p => <tr key={p.id}>
             <td>{p.child_code}</td><td>{p.grade}</td>
             <td><span className={`badge ${p.status}`}>{p.status}</span></td>
             <td><a href={`/plans/${p.id}`}>開く</a> <button className="btn" onClick={() => duplicate(p.id)} style={{ marginLeft: 8 }}>複製（年度更新）</button></td>

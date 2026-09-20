@@ -72,14 +72,17 @@ async def upload(file: UploadFile = File(...), user: dict = Depends(auth.current
     suffix = Path(file.filename or "template").suffix.lower() or ".txt"
     if suffix not in (".txt", ".docx", ".xlsx"):
         raise HTTPException(400, "対応形式は .txt/.docx/.xlsx です")
-    dest = d / f"original{suffix}"
+    dest = _tdir(tid) / f"original{suffix}"
     dest.write_bytes(raw)
-    if suffix == ".txt":
-        slots = template_engine.extract_txt(dest.read_text(encoding="utf-8", errors="ignore"))
-    elif suffix == ".docx":
-        slots = template_engine.extract_docx(str(dest))
-    else:
-        slots = template_engine.extract_xlsx(str(dest))
+    try:
+        if suffix == ".txt":
+            slots = template_engine.extract_txt(dest.read_text(encoding="utf-8", errors="ignore"))
+        elif suffix == ".docx":
+            slots = template_engine.extract_docx(str(dest))
+        else:
+            slots = template_engine.extract_xlsx(str(dest))
+    except Exception as e:  # noqa: BLE001 - 破損・偽装ファイルは400
+        raise HTTPException(400, f"ファイル解析失敗（破損の可能性）: {str(e)[:200]}")
     (d / "slots.json").write_text(json.dumps(slots, ensure_ascii=False, indent=2), encoding="utf-8")
     with db.conn() as c:
         c.execute("INSERT INTO templates(id,filename,suffix,label,mapping_json,created_by,created_at) VALUES(?,?,?,?,?,?,?)",

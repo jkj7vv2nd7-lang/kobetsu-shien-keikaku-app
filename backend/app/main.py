@@ -72,9 +72,10 @@ def audit_export(user: dict = Depends(auth.current_user)):
     w = _csv.writer(buf)
     w.writerow(["id", "日時", "ユーザ", "操作", "対象", "詳細"])
     import datetime as _dt
+    from app.routers.handover import csv_safe as _csv_safe
     for r in rows:
         w.writerow([r["id"], _dt.datetime.fromtimestamp(r["at"]).strftime("%Y-%m-%d %H:%M:%S"),
-                    r["username"], r["action"], r["target"], r["detail"]])
+                    _csv_safe(r["username"]), _csv_safe(r["action"]), _csv_safe(r["target"]), _csv_safe(r["detail"])])
     payload = "\ufeff".encode("utf-8") + buf.getvalue().encode("utf-8")
     db.audit(user["username"], "audit.export", "", f"{len(rows)}件")
     return _Resp(content=payload, media_type="text/csv",

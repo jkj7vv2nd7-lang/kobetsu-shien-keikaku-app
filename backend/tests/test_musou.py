@@ -135,3 +135,27 @@ def test_robust_merge_details(tmp_path):
     out2 = tmp_path / 'd2.xlsx'
     template_engine.merge_xlsx(str(p2), str(out2), {'written_date': '令和8年4月'}, {'xlsx_Sheet_A1': 'written_date'})
     assert load_workbook(out2).active['A1'].value == '令和8年4月'
+
+
+def test_logout_csvupload_guards():
+    sys.path.insert(0, str(BASE / 'backend'))
+    import io as _io
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app import auth as auth_mod
+    auth_mod.ensure_user('s_user', 's_user123', 'teacher', '')
+    cc = TestClient(app)
+    t = cc.post('/api/auth/login', json={'username': 's_user', 'password': 's_user123'}).json()['token']
+    hh = {'Authorization': f'Bearer {t}'}
+    # logoutでセッション無効化
+    assert cc.post('/api/auth/logout', headers=hh).json() == {'ok': True}
+    assert cc.get('/api/plans', headers=hh).status_code == 401
+    # CSVインジェクション中和
+    from app.routers.handover import csv_safe
+    assert csv_safe('=cmd|1') == chr(39) + '=cmd|1'
+    assert csv_safe('普通') == '普通'
+    # 壊れたxlsxは400
+    t2 = cc.post('/api/auth/login', json={'username': 's_user', 'password': 's_user123'}).json()['token']
+    hh2 = {'Authorization': f'Bearer {t2}'}
+    r = cc.post('/api/templates/upload', files={'file': ('x.xlsx', _io.BytesIO(b'not a zip'))}, headers=hh2)
+    assert r.status_code == 400, r.status_code
