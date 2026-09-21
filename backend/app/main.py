@@ -38,7 +38,8 @@ app.include_router(handover.router)
 @app.get("/api/health")
 def health():
     import shutil
-    info: dict = {"ok": True, "llm_provider": llm.PROVIDER, "db": "postgres" if db.USE_PG else "sqlite"}
+    info: dict = {"ok": True, "llm_provider": llm.PROVIDER, "db": "postgres" if db.USE_PG else "sqlite",
+                  "simple_mode": auth.SIMPLE_MODE}
     try:
         with db.conn() as c:
             info["users"] = dict(c.execute("SELECT COUNT(*) AS n FROM users").fetchone())["n"]
@@ -101,7 +102,7 @@ def audit_list(limit: int = 200, user: dict = Depends(auth.current_user)):
 @app.post("/api/admin/roster")
 def roster_import(body: dict, user: dict = Depends(auth.current_user)):
     """名簿CSV相当の一括取込（年度当初用）。rows:[{child_code,grade,class_type,school}]。200件上限。"""
-    auth.require_role(user, "admin", "manager")
+    auth.require_role(user, "admin", "manager", "teacher")
     import time as _t
     import uuid as _uuid
     rows = (body or {}).get("rows", [])
@@ -204,13 +205,13 @@ def oneroster_import(body: dict, user: dict = Depends(auth.current_user)):
     """OneRoster users.csv 取込（教職員→ユーザ、児童生徒→計画下書き）。
 
     対応列：sourcedId, enabledUser, givenName, familyName, role [teacher|student|administrator],
-    grades, orgSourcedIds。詳細は docs/oneroster.md。
+    grades, orgSourcedIds。    詳細は docs/oneroster.md。
     """
     import csv as _csv
     import io as _io
     import time as _t
     import uuid as _uuid
-    auth.require_role(user, "admin", "manager")
+    auth.require_role(user, "admin", "manager", "teacher")
     text = ((body or {}).get("csv", "") or "")
     if len(text) > 2 * 1024 * 1024:
         from fastapi import HTTPException as _HE

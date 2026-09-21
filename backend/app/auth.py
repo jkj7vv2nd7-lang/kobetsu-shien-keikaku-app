@@ -160,3 +160,12 @@ def issue_api_key(user_id: str, label: str = "") -> tuple:
 def require_role(user: dict, *allowed: str) -> None:
     if user["role"] not in allowed and user["role"] != "admin":
         raise HTTPException(status_code=403, detail=f"権限不足（必要: {allowed}）")
+
+
+def require_manager(user: dict) -> None:
+    """管理職相当の確認。簡易モードでは担任も可（委員会許可など組織承認が前提）。"""
+    if user["role"] in ("admin", "manager"):
+        return
+    if SIMPLE_MODE and user["role"] == "teacher":
+        return
+    raise HTTPException(status_code=403, detail="権限不足（管理職）")

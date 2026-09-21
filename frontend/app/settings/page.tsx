@@ -29,7 +29,7 @@ export default function Settings() {
     <main>
       <h2>設定（管理職）</h2>
       <div className="card">
-        <h3>APIキー発行（使用者本人のキー）</h3>
+        <h3>APIキー発行（使用者本人のキー・担任は自分の分のみ）</h3>
         <input value={uname} onChange={e => setUname(e.target.value)} placeholder="ユーザ名" />
         <input value={label} onChange={e => setLabel(e.target.value)} placeholder="用途メモ" style={{ marginLeft: 8 }} />
         <button className="btn primary" onClick={issue} style={{ marginLeft: 8 }}>発行</button>

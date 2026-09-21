@@ -29,10 +29,11 @@ def test_api_key_flow():
     kid = cc.get("/api/auth/keys", headers=mh).json()[0]["id"]
     cc.delete(f"/api/auth/keys/{kid}", headers=mh)
     assert cc.get("/api/auth/me", headers=kh).status_code == 401
-    # 教員は発行不可
+    # 教員は自分のキーのみ発行可・他者は不可
     t = cc.post("/api/auth/login", json={"username": "k_teacher", "password": "k_teacher123"}).json()["token"]
     th = {"Authorization": f"Bearer {t}"}
-    assert cc.post("/api/auth/keys", json={"username": "k_teacher"}, headers=th).status_code == 403
+    assert cc.post("/api/auth/keys", json={"username": "k_teacher"}, headers=th).status_code == 200
+    assert cc.post("/api/auth/keys", json={"username": "other"}, headers=th).status_code == 403
 
 
 def test_simple_mode_flag():

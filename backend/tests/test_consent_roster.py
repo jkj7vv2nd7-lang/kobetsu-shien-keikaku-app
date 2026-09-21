@@ -53,6 +53,6 @@ def test_oneroster_import():
     # 氏名は保存しない
     got = cc.get(f"/api/plans/{r['students'][0]['id']}", headers=mh).json()
     assert "familyName" not in str(got["data"]) and "田中" not in str(got["data"])
-    # 権限・上限
-    assert cc.post("/api/admin/oneroster", json={"csv": csv_text}, headers=th).status_code == 403
+    # 権限・上限（担任も取込可・起案方針）
+    assert cc.post("/api/admin/oneroster", json={"csv": csv_text}, headers=th).status_code == 200
     assert cc.post("/api/admin/oneroster", json={"csv": "x" * (2 * 1024 * 1024 + 1)}, headers=mh).status_code == 400

@@ -427,7 +427,7 @@ def create_snippet(body: SnippetBody, user: dict = Depends(auth.current_user)):
 
 @router.delete("/snippets/all/{sid}")
 def delete_snippet(sid: str, user: dict = Depends(auth.current_user)):
-    auth.require_role(user, "admin", "manager")
+    auth.require_role(user, "admin", "manager", "teacher")
     with db.conn() as c:
         c.execute("DELETE FROM snippets WHERE id=?", (sid,))
     db.audit(user["username"], "snippet.delete", sid, "")

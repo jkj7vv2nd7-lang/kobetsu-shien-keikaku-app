@@ -51,8 +51,8 @@ def test_roster_import():
             {"child_code": "", "grade": "小3"}]
     r = cc.post("/api/admin/roster", json={"rows": rows}, headers=mh).json()
     assert len(r["created"]) == 2 and len(r["skipped"]) == 1
-    # 重複はスキップ、教員は権限なし
+    # 重複はスキップ、担任も取込可（起案方針）
     r2 = cc.post("/api/admin/roster", json={"rows": rows[:1]}, headers=mh).json()
     assert len(r2["created"]) == 0 and len(r2["skipped"]) == 1
-    assert cc.post("/api/admin/roster", json={"rows": rows[:1]}, headers=th).status_code == 403
+    assert cc.post("/api/admin/roster", json={"rows": rows[:1]}, headers=th).status_code == 200
     assert cc.post("/api/admin/roster", json={"rows": list(range(201))}, headers=mh).status_code == 400

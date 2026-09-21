@@ -32,6 +32,31 @@ def seed():
     return {"ok": True, "users": ["admin", "manager", "teacher", "viewer"]}
 
 
+class SignupBody(BaseModel):
+    username: str = ""
+    password: str = ""
+    school: str = ""
+
+
+@router.post("/signup")
+def signup(body: SignupBody, req: Request):
+    """自己登録（担任権限）。委員会許可など組織承認がある場合の運用向け。"""
+    import re as _re
+    _limited(f"signup:{req.client.host if req.client else '?'}")
+    uname = (body.username or "").strip()
+    if not _re.fullmatch(r"[A-Za-z0-9_.-]{3,50}", uname):
+        raise HTTPException(400, "ユーザ名は半角英数・._- の3〜50字にしてください")
+    if len(body.password) < 8 or len(body.password) > 200:
+        raise HTTPException(400, "パスワードは8〜200字にしてください")
+    with db.conn() as c:
+        if c.execute("SELECT id FROM users WHERE username=?", (uname,)).fetchone():
+            raise HTTPException(400, "そのユーザ名は使用済みです")
+    u = auth.ensure_user(uname, body.password, "teacher", body.school.strip()[:100])
+    tok = auth.issue_token(u["id"])
+    db.audit(uname, "auth.signup", "", "")
+    return {"token": tok, "username": uname, "role": "teacher"}
+
+
 @router.post("/login")
 def login(body: LoginBody, req: Request):
     if len(body.username) > 200 or len(body.password) > 200:
@@ -184,16 +209,19 @@ class KeyBody(BaseModel):
 
 @router.get("/keys")
 def list_keys(user: dict = Depends(auth.current_user)):
-    auth.require_role(user, "admin", "manager")
     with db.conn() as c:
-        rows = c.execute("SELECT k.id,k.label,k.revoked,k.created_at,u.username FROM api_keys k JOIN users u ON u.id=k.user_id ORDER BY k.created_at DESC LIMIT 200").fetchall()
+        if user["role"] in ("admin", "manager"):
+            rows = c.execute("SELECT k.id,k.label,k.revoked,k.created_at,u.username FROM api_keys k JOIN users u ON u.id=k.user_id ORDER BY k.created_at DESC LIMIT 200").fetchall()
+        else:
+            rows = c.execute("SELECT k.id,k.label,k.revoked,k.created_at,u.username FROM api_keys k JOIN users u ON u.id=k.user_id WHERE u.id=? ORDER BY k.created_at DESC LIMIT 200", (user["id"],)).fetchall()
         return [dict(r) for r in rows]
 
 
 @router.post("/keys")
 def issue_key(body: KeyBody, user: dict = Depends(auth.current_user)):
-    """使用者本人のAPIキーを発行（平文はこの応答でのみ表示）。"""
-    auth.require_role(user, "admin", "manager")
+    """使用者本人のAPIキーを発行（平文はこの応答でのみ表示）。管理職以外は自分自身の分のみ。"""
+    if user["role"] not in ("admin", "manager") and body.username.strip() != user["username"]:
+        raise HTTPException(403, "自分のキー以外は管理職が発行します")
     with db.conn() as c:
         r = c.execute("SELECT * FROM users WHERE username=?", (body.username.strip(),)).fetchone()
         if not r:
@@ -205,8 +233,12 @@ def issue_key(body: KeyBody, user: dict = Depends(auth.current_user)):
 
 @router.delete("/keys/{kid}")
 def revoke_key(kid: str, user: dict = Depends(auth.current_user)):
-    auth.require_role(user, "admin", "manager")
     with db.conn() as c:
+        r = c.execute("SELECT user_id FROM api_keys WHERE id=?", (kid,)).fetchone()
+        if not r:
+            raise HTTPException(404, "not found")
+        if user["role"] not in ("admin", "manager") and dict(r)["user_id"] != user["id"]:
+            raise HTTPException(403, "自分のキー以外は管理職が取消します")
         c.execute("UPDATE api_keys SET revoked=1 WHERE id=?", (kid,))
     db.audit(user["username"], "auth.key_revoke", kid, "")
     return {"ok": True}

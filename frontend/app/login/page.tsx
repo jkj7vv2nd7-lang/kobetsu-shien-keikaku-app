@@ -42,6 +42,7 @@ export default function Login() {
       <p>{msg}</p>
       {warn && <p className="issue-err">{warn}</p>}
       <ApiKeyLogin />
+      <Signup />
       <MfaSetup />
       <PwChange />
       <p style={{ fontSize: 13 }}>MFA設定はログイン後に「確認コード発行」から（認証アプリに手動登録）。管理職は有効化を推奨。</p>
@@ -86,6 +87,28 @@ function ApiKeyLogin() {
       <h3>APIキーでログイン（委員会許可の運用向け）</h3>
       <input value={key} onChange={e => setKey(e.target.value)} placeholder="sk-..." style={{ width: 320 }} />
       <button onClick={go} style={{ marginLeft: 8 }}>ログイン</button>
+      <p style={{ fontSize: 13 }}>{msg}</p>
+    </div>
+  );
+}
+
+function Signup() {
+  const [u, setU] = useState("");
+  const [p, setP] = useState("");
+  const [msg, setMsg] = useState("");
+  async function go() {
+    const r = await fetch(`${API}/api/auth/signup`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) });
+    const j = await r.json();
+    if (j.token) { localStorage.setItem("token", j.token); window.location.href = "/"; }
+    else setMsg(`登録失敗: ${JSON.stringify(j).slice(0, 200)}`);
+  }
+  return (
+    <div style={{ marginTop: 16, borderTop: "1px solid #ddd", paddingTop: 8 }}>
+      <h3>新規登録（担任権限・管理職の関与なし）</h3>
+      <input value={u} onChange={e => setU(e.target.value)} placeholder="ユーザ名（半角英数3〜）" />
+      <input value={p} onChange={e => setP(e.target.value)} type="password" placeholder="パスワード（8文字〜）" style={{ marginLeft: 8 }} />
+      <button onClick={go} style={{ marginLeft: 8 }}>登録して始める</button>
       <p style={{ fontSize: 13 }}>{msg}</p>
     </div>
   );
