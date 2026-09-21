@@ -36,8 +36,12 @@
 - Windowsパソコン（Python 3.12以上、Node.js 22以上）
 - プログラム一式（このリポジトリ）
 
-### 2.2 セットアップ手順
-1. フォルダを開きます（例：`C:\Users\masan\開発中のアプリ\個別支援＿個別指導計画作成`）
+### 2.2 セットアップ手順（かんたん）
+1. `setup.bat` をダブルクリックします（初回のみ、数分かかります）
+2. 普段は `start.bat` をダブルクリックするだけです。黒い画面が2つ開き、ブラウザが自動で開きます
+3. 終わるときは黒い画面を2つとも閉じます
+
+<details><summary>手動で起動する場合（上級者向け）</summary>
 2. バックエンドの準備をします（PowerShellで実行）：
 ```powershell
 pip install -r backend\requirements.txt
@@ -54,6 +58,7 @@ npm install
 npm run dev
 ```
 5. ブラウザで `http://localhost:3000` を開きます
+</details>
 
 ### 2.3 初期ユーザと初期設定
 - 初期ユーザ：`admin` / `manager` / `teacher` / `viewer`（パスワードは `○○○123`、例：`teacher123`）

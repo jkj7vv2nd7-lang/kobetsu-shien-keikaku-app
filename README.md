@@ -20,7 +20,13 @@ AIの支援を受けながら作成・印刷できるWebアプリです。
 - `templates/`：文科省試作様式・新潟県様式＋映射
 - `MANUAL.md`：操作マニュアル、`docs/`：設計・運用・公開手順
 
-## すぐ試す（ローカル）
+## すぐ試す（ローカル・Windows）
+1. `setup.bat` をダブルクリック（初回のみ）
+2. `start.bat` をダブルクリック→ブラウザが自動で開きます
+3. ログイン画面の「新規登録」から自分のアカウント作成
+
+<details><summary>手動起動（上級者向け）</summary>
+
 ```powershell
 pip install -r backend\requirements.txt
 python backend\seed_niigata.py
@@ -28,7 +34,8 @@ python -m uvicorn app.main:app --app-dir backend --reload
 # 別ターミナル
 cd frontend; npm install; npm run dev
 ```
-`http://localhost:3000` を開き `teacher` / `teacher123` でログイン（初回はPW変更）。
+</details>
+
 公開手順は [docs/DEPLOY.md](docs/DEPLOY.md) を参照。
 
 ## セキュリティの考え方
