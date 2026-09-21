@@ -78,3 +78,21 @@ def test_backup_restore_tmp():
         raise SystemExit("forceなし復元は不可のはず")
     except RuntimeError:
         pass
+
+
+def test_draft_kinds_and_archive_bundle():
+    sys.path.insert(0, str(BASE / 'backend'))
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app import auth as auth_mod
+    auth_mod.ensure_user('k2_mgr', 'k2_mgr123', 'manager', '')
+    cc = TestClient(app)
+    t = cc.post('/api/auth/login', json={'username': 'k2_mgr', 'password': 'k2_mgr123'}).json()['token']
+    mh = {'Authorization': f'Bearer {t}'}
+    for kind in ('wish', 'support', 'eval'):
+        r = cc.post('/api/ai/draft', json={'kind': kind, 'facts': '実態'}, headers=mh).json()
+        assert '試作下書き' in r.get('text', ''), kind
+    import io, zipfile
+    z = cc.get('/api/admin/archive', headers=mh)
+    names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
+    assert any(n.endswith('.json') for n in names)

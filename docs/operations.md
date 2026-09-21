@@ -7,6 +7,7 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 別ターミナルで `cd frontend; npm run dev`。ブラウザは `http://localhost:3000`。
 校内公開時は `--host 0.0.0.0`＋ファイアウォールで校内網のみ許可すること。
+**注意：SQLite利用時はワーカー数を1にすること**（`--workers 1`が既定。増やすとロック競合の原因になる）。
 
 ## 定期バックアップ（週1推奨）
 ```powershell

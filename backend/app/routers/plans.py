@@ -258,6 +258,11 @@ def create_share(pid: str, body: ShareBody, user: dict = Depends(auth.current_us
         st = c.execute("SELECT status FROM plans WHERE id=?", (pid,)).fetchone()
         if not st or dict(st)["status"] not in ("review", "approved"):
             raise HTTPException(400, "共有は提出(review)以降の計画のみ可能です")
+        # 期限切れ共有の掃除（ついで）
+        try:
+            c.execute("DELETE FROM shares WHERE expires_at<? OR revoked=1", (time.time(),))
+        except Exception:
+            pass
         sid = uuid.uuid4().hex[:12]
         tok = _secrets.token_urlsafe(24)
         now = time.time()

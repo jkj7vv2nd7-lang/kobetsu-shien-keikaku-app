@@ -278,8 +278,14 @@ def archive_all(user: dict = Depends(auth.current_user)):
         with db.conn() as c:
             plans = [dict(r) for r in c.execute("SELECT * FROM plans ORDER BY child_code").fetchall()]
             for p in plans:
+                pid = p["id"]
+                bundle = {"plan": p,
+                          "comments": [dict(r) for r in c.execute("SELECT author,body,created_at FROM comments WHERE plan_id=? ORDER BY created_at", (pid,)).fetchall()],
+                          "records": [dict(r) for r in c.execute("SELECT author,date,goal_ref,body,created_at FROM records WHERE plan_id=? ORDER BY date", (pid,)).fetchall()],
+                          "consents": [dict(r) for r in c.execute("SELECT consenter,method,plan_hash,agreed_at FROM consents WHERE plan_id=? ORDER BY agreed_at", (pid,)).fetchall()],
+                          "versions": dict(c.execute("SELECT COUNT(*) AS n FROM versions WHERE plan_id=?", (pid,)).fetchone())["n"]}
                 zf.writestr(f"plans/{p['child_code']}_{p['id']}.json",
-                            json.dumps(p, ensure_ascii=False, indent=2, default=str))
+                            json.dumps(bundle, ensure_ascii=False, indent=2, default=str))
     payload = buf.getvalue()
     db.audit(user["username"], "admin.archive", "", f"{len(plans)}件")
     return _Resp(content=payload, media_type="application/zip",

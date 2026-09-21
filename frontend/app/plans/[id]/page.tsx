@@ -197,6 +197,9 @@ export default function PlanDetail() {
           <select value={draftKind} onChange={e => setDraftKind(e.target.value)}>
             <option value="guidance_long_goal">長期目標の下書き</option>
             <option value="short_goal">短期目標の下書き</option>
+            <option value="wish">願いの下書き</option>
+            <option value="support">手立ての下書き</option>
+            <option value="eval">評価文の下書き</option>
             <option value="summary">引継ぎ要約</option>
           </select>
           <select value={draftTarget} onChange={e => setDraftTarget(e.target.value)} style={{ marginLeft: 8 }}>
@@ -204,6 +207,8 @@ export default function PlanDetail() {
             <option value="short_goal_1">反映先：短期目標1</option>
             <option value="short_goal_2">反映先：短期目標2</option>
             <option value="supports">反映先：具体的支援</option>
+            <option value="wish">反映先：願い・希望</option>
+            <option value="eval_method">反映先：評価方法</option>
             <option value="eval_handover">反映先：評価・引継ぎ</option>
             <option value="start_ease">反映先：糊しろ</option>
           </select>
