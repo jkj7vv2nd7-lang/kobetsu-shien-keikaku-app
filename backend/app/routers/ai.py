@@ -54,8 +54,18 @@ def _guard(body: AiBody):
     return anon, problems
 
 
+def _need_consent(user: dict, provider: str | None) -> None:
+    """外部LLM送信時のみ同意必須（mock・規則ベースは対象外）。"""
+    from app.core import llm as _llm
+    prov = (provider or _llm.PROVIDER).lower()
+    if prov != "mock" and not auth.SIMPLE_MODE and not user.get("ai_consent"):
+        from fastapi import HTTPException as _HE
+        raise _HE(403, "外部AI利用の同意が必要です（設定・AI利用同意から）")
+
+
 @router.post("/draft")
 def draft(body: AiBody, user: dict = Depends(auth.current_user)):
+    _need_consent(user, body.provider)
     auth.limited(f"ai:{user['username']}", 30, 300)
     anon, problems = _guard(body)
     if problems:
@@ -71,6 +81,7 @@ def draft(body: AiBody, user: dict = Depends(auth.current_user)):
 
 @router.post("/check")
 def check(body: AiBody, user: dict = Depends(auth.current_user)):
+    _need_consent(user, body.provider)
     auth.limited(f"ai:{user['username']}", 30, 300)
     anon, problems = _guard(body)
     if problems:
@@ -84,6 +95,7 @@ def check(body: AiBody, user: dict = Depends(auth.current_user)):
 @router.post("/summary")
 def summary(body: AiBody, user: dict = Depends(auth.current_user)):
     """引継ぎ要約：facts=前年度記録等。plan_id指定時は非PII項目から自動構成。"""
+    _need_consent(user, body.provider)
     auth.limited(f"ai:{user['username']}", 30, 300)
     anon, problems = _guard(body)
     if problems:

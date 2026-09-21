@@ -19,8 +19,9 @@ DATA = BACKEND / "data"
 BACKUP_DIR = BACKEND / "backups"
 
 
-def backup(out_dir: str | None = None) -> Path:
+def backup(out_dir: str | None = None, data_dir: Path | None = None) -> Path:
     db.init_db()
+    src_data = Path(data_dir) if data_dir else DATA
     dest = Path(out_dir) if out_dir else BACKUP_DIR
     dest.mkdir(parents=True, exist_ok=True)
     name = f"backup_{time.strftime('%Y%m%d_%H%M%S')}.zip"
@@ -28,7 +29,7 @@ def backup(out_dir: str | None = None) -> Path:
     tmp = dest / f".tmp_{name}"
     if tmp.exists():
         shutil.rmtree(tmp)
-    shutil.copytree(DATA, tmp, ignore=shutil.ignore_patterns("*.wal", "*.shm", "*.journal"))
+    shutil.copytree(src_data, tmp, ignore=shutil.ignore_patterns("*.wal", "*.shm", "*.journal"))
     zpath = dest / name
     shutil.make_archive(str(zpath.with_suffix("")), "zip", root_dir=tmp.parent, base_dir=tmp.name)
     shutil.rmtree(tmp)
@@ -36,7 +37,7 @@ def backup(out_dir: str | None = None) -> Path:
     return zpath
 
 
-def restore(zpath: str, force: bool = False) -> Path:
+def restore(zpath: str, force: bool = False, data_dir: Path | None = None) -> Path:
     import zipfile
     z = Path(zpath)
     if not z.exists():
@@ -45,7 +46,8 @@ def restore(zpath: str, force: bool = False) -> Path:
         raise RuntimeError("上書き復元には --force が必要です")
     if not zipfile.is_zipfile(z):
         raise RuntimeError("zipではありません")
-    tmp = BACKUP_DIR / ".restore_tmp"
+    target = Path(data_dir) if data_dir else DATA
+    tmp = (Path(data_dir).parent if data_dir else BACKUP_DIR) / ".restore_tmp"
     if tmp.exists():
         shutil.rmtree(tmp)
     with zipfile.ZipFile(z) as zf:
@@ -57,14 +59,14 @@ def restore(zpath: str, force: bool = False) -> Path:
     src = inner[0] if len(inner) == 1 and inner[0].is_dir() else tmp
     if not (src / "app.db").exists() and not (src / "templates").exists():
         raise RuntimeError("バックアップ内容が不正（app.db/templatesなし）")
-    bak = BACKEND / f"data.prev_{time.strftime('%Y%m%d_%H%M%S')}"
-    if DATA.exists():
-        DATA.rename(bak)
+    bak = (Path(data_dir).parent if data_dir else BACKEND) / f"data.prev_{time.strftime('%Y%m%d_%H%M%S')}"
+    if target.exists():
+        target.rename(bak)
         print(f"現行dataを退避: {bak}")
-    shutil.move(str(src), str(DATA))
+    shutil.move(str(src), str(target))
     shutil.rmtree(tmp, ignore_errors=True)
-    print(f"restore: {z} -> {DATA}")
-    return DATA
+    print(f"restore: {z} -> {target}")
+    return target
 
 
 if __name__ == "__main__":

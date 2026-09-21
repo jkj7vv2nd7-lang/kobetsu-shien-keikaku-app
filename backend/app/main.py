@@ -196,8 +196,12 @@ def stats_summary(user: dict = Depends(auth.current_user)):
             due_soon.append(info)
     recent = [{"id": p["id"], "child_code": p["child_code"], "grade": p["grade"],
                "status": p["status"], "updated_at": p["updated_at"]} for p in items[:10]]
+    import time as _t2
+    review_stuck = [{"id": p["id"], "child_code": p["child_code"]}
+                    for p in items if p.get("status") == "review" and (_t2.time() - (p.get("updated_at") or 0)) > 14 * 86400]
     return {"total": len(items), "by_status": by_status, "blocked": blocked, "recent": recent,
-            "overdue": overdue, "due_soon": due_soon, "no_review_date": no_date}
+            "overdue": overdue, "due_soon": due_soon, "no_review_date": no_date,
+            "review_stuck": review_stuck}
 
 
 @app.post("/api/admin/oneroster")

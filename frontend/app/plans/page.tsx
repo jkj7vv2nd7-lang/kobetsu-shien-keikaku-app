@@ -1,18 +1,31 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, authHeaders } from "../../lib/api";
+import { API, api, authHeaders } from "../../lib/api";
 
 export default function Plans() {
   const [plans, setPlans] = useState<any[]>([]);
   const [msg, setMsg] = useState("");
   const [filter, setFilter] = useState("");
   const [q, setQ] = useState("");
+  const [sel, setSel] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState({ child_code: "S-2026-001", grade: "小4", class_type: "特別支援学級", school: "" });
   async function load(query?: string) {
     try { setPlans(await api(`/api/plans${query ? `?q=${encodeURIComponent(query)}` : ""}`, { headers: authHeaders() })); setMsg(""); }
     catch (e: any) { setMsg(`読込失敗（要ログイン）: ${e.message}`); }
   }
   useEffect(() => { load(); }, []);
+  async function bulkPdf() {
+    const ids = Object.keys(sel).filter(k => sel[k]);
+    if (ids.length === 0) { setMsg("選択がありません"); return; }
+    try {
+      const r = await fetch(`${API}/api/templates/bulk-pdf`, { method: "POST",
+        headers: { ...authHeaders() }, body: JSON.stringify({ plan_ids: ids }) });
+      if (!r.ok) { setMsg(`一括PDF失敗: ${(await r.text()).slice(0, 200)}`); return; }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await r.blob()); a.download = "bulk.pdf"; a.click();
+      setMsg(`${ids.length}件を一括PDF化しました`);
+    } catch (e: any) { setMsg(`一括PDF失敗: ${e.message}`); }
+  }
   async function duplicate(id: string) {
     try {
       const j = await api(`/api/plans/${id}/duplicate`, { method: "POST", headers: authHeaders() });
@@ -58,6 +71,7 @@ export default function Plans() {
       <div className="card">
         検索：<input value={q} onChange={e => setQ(e.target.value)} placeholder="管理番号・学年" style={{ width: 180 }} />
         <button className="btn" onClick={() => load(q)} style={{ marginLeft: 8 }}>検索</button>
+        <button className="btn primary" onClick={bulkPdf} style={{ marginLeft: 8 }}>選択を一括PDF</button>
         絞り込み：
         <select value={filter} onChange={e => setFilter(e.target.value)}>
           <option value="">すべて</option>
@@ -65,8 +79,9 @@ export default function Plans() {
           <option value="review">提出中</option>
           <option value="approved">承認済</option>
         </select>
-        <table className="grid" style={{ marginTop: 8 }}><thead><tr><th>管理番号</th><th>学年</th><th>状態</th><th></th></tr></thead>
+        <table className="grid" style={{ marginTop: 8 }}><thead><tr><th></th><th>管理番号</th><th>学年</th><th>状態</th><th></th></tr></thead>
           <tbody>{plans.filter(p => !filter || p.status === filter).map(p => <tr key={p.id}>
+            <td><input type="checkbox" checked={!!sel[p.id]} onChange={e => setSel({ ...sel, [p.id]: e.target.checked })} /></td>
             <td>{p.child_code}</td><td>{p.grade}</td>
             <td><span className={`badge ${p.status}`}>{p.status}</span></td>
             <td><a href={`/plans/${p.id}`}>開く</a> <button className="btn" onClick={() => duplicate(p.id)} style={{ marginLeft: 8 }}>複製（年度更新）</button></td>

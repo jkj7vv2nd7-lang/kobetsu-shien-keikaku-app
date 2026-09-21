@@ -153,7 +153,21 @@ def me(user: dict = Depends(auth.current_user)):
     return {"username": user["username"], "role": user["role"], "school": user.get("school", ""),
             "mfa": bool(user.get("totp_secret")),
             "must_change_pw": (False if auth.SIMPLE_MODE else bool(user.get("must_change_pw"))),
+            "ai_consent": bool(user.get("ai_consent")),
             "simple_mode": auth.SIMPLE_MODE}
+
+
+class ConsentAiBody(BaseModel):
+    agree: bool = False
+
+
+@router.post("/ai-consent")
+def ai_consent(body: ConsentAiBody, user: dict = Depends(auth.current_user)):
+    """生成AI利用の同意記録（文科省ガイドライン準拠の運用）。"""
+    with db.conn() as c:
+        c.execute("UPDATE users SET ai_consent=? WHERE id=?", (1 if body.agree else 0, user["id"]))
+    db.audit(user["username"], "auth.ai_consent", "", "agree" if body.agree else "withdraw")
+    return {"ok": True, "ai_consent": bool(body.agree)}
 
 
 @router.get("/sso/me")

@@ -18,7 +18,7 @@ SCHEMA_SQLITE = """
 CREATE TABLE IF NOT EXISTS users(
   id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, pw_hash TEXT NOT NULL,
   salt TEXT NOT NULL, role TEXT NOT NULL, school TEXT DEFAULT '',
-  totp_secret TEXT DEFAULT '', must_change_pw INTEGER DEFAULT 0, created_at REAL NOT NULL);
+  totp_secret TEXT DEFAULT '', must_change_pw INTEGER DEFAULT 0, ai_consent INTEGER DEFAULT 0, created_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(
   token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS plans(
@@ -64,7 +64,7 @@ SCHEMA_PG = """
 CREATE TABLE IF NOT EXISTS users(
   id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, pw_hash TEXT NOT NULL,
   salt TEXT NOT NULL, role TEXT NOT NULL, school TEXT DEFAULT '',
-  totp_secret TEXT DEFAULT '', must_change_pw INTEGER DEFAULT 0, created_at DOUBLE PRECISION NOT NULL);
+  totp_secret TEXT DEFAULT '', must_change_pw INTEGER DEFAULT 0, ai_consent INTEGER DEFAULT 0, created_at DOUBLE PRECISION NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(
   token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at DOUBLE PRECISION NOT NULL);
 CREATE TABLE IF NOT EXISTS plans(
@@ -194,7 +194,8 @@ def init_db() -> None:
     # 既存DBへの追加カラム（マイグレーション）
     with conn() as c:
         for ddl in ("ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT ''",
-                    "ALTER TABLE users ADD COLUMN must_change_pw INTEGER DEFAULT 0"):
+                    "ALTER TABLE users ADD COLUMN must_change_pw INTEGER DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN ai_consent INTEGER DEFAULT 0"):
             try:
                 c.execute(ddl)
             except Exception:

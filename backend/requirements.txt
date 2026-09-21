@@ -8,3 +8,4 @@ httpx
 psycopg[binary]  # Postgres利用時のみ（既定SQLiteでは不要）
 fpdf2  # PDF直接生成用
 japanize-matplotlib  # PDF用日本語フォント（IPAexゴシック同梱）
+pypdf  # PDF結合（一括出力）用

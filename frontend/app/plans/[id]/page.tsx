@@ -192,6 +192,7 @@ export default function PlanDetail() {
       )}
       <div className="card noprint" style={{ marginTop: 12 }}>
         <h3>AI支援（匿名化後のみ送信・要確認）</h3>
+        <AiConsent />
         <div>
           <select value={draftKind} onChange={e => setDraftKind(e.target.value)}>
             <option value="guidance_long_goal">長期目標の下書き</option>
@@ -243,6 +244,23 @@ export default function PlanDetail() {
       <Comments id={id} />
       <Records id={id} />
     </main>
+  );
+}
+
+function AiConsent() {
+  const [ok, setOk] = useState<boolean | null>(null);
+  useEffect(() => {
+    api(`/api/auth/me`, { headers: authHeaders() }).then(m => setOk(!!m.ai_consent)).catch(() => {});
+  }, []);
+  async function agree(v: boolean) {
+    const j = await api(`/api/auth/ai-consent`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ agree: v }) });
+    setOk(j.ai_consent);
+  }
+  if (ok === null) return null;
+  if (ok) return <p className="muted">外部AI利用に同意済み（いつでも撤回可） <button className="btn" onClick={() => agree(false)}>撤回</button></p>;
+  return (
+    <p>外部AI（Gemini等）利用時は <button className="btn primary" onClick={() => agree(true)}>利用に同意する</button>
+      <span className="muted">（試作応答・規則ベース機能は同意不要。文科省ガイドライン準拠）</span></p>
   );
 }
 

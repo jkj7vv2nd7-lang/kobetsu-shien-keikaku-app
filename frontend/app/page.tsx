@@ -41,6 +41,8 @@ export default function Home() {
             <span key={p.id}><a href={`/plans/${p.id}`}>{p.child_code}</a>（{p.next_review_date}） </span>))}</p>)}
           {s.due_soon?.length > 0 && (<p className="issue-warn">30日以内：{s.due_soon.map((p: any) => (
             <span key={p.id}><a href={`/plans/${p.id}`}>{p.child_code}</a>（{p.next_review_date}） </span>))}</p>)}
+          {s.review_stuck?.length > 0 && (<p className="issue-err">提出から14日以上停滞：{s.review_stuck.map((p: any) => (
+            <span key={p.id}><a href={`/plans/${p.id}`}>{p.child_code}</a> </span>))}</p>)}
         </div>
       )}
       <div className="card">

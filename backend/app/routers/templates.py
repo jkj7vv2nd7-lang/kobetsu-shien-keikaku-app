@@ -225,6 +225,40 @@ def template_pdf(tid: str, body: MergeBody, user: dict = Depends(auth.current_us
                     headers={"Content-Disposition": f"attachment; filename=niigata_{_safe_name(str(data.get('child_code', '')))}.pdf"})
 
 
+@router.post("/bulk-pdf")
+def bulk_pdf(body: dict, user: dict = Depends(auth.current_user)):
+    """複数計画の一括PDF（学級セット印刷用・新潟様式・最大30件）。"""
+    import io as _io
+    from fastapi.responses import Response as _Resp
+    from app import pdfgen
+    from app.routers.plans import _get_plan_or_403
+    from pypdf import PdfWriter
+    auth.require_role(user, "admin", "manager", "teacher")
+    pids = ((body or {}).get("plan_ids", []) or [])[:30]
+    if not pids:
+        raise HTTPException(400, "plan_idsを指定してください")
+    writer = PdfWriter()
+    n = 0
+    for pid in pids:
+        p = _get_plan_or_403(str(pid), user)
+        data = json.loads(p["data_json"] or "{}")
+        issues = _validate(data)
+        if any(i.get("level") == "error" for i in issues):
+            continue
+        from pypdf import PdfReader
+        reader = PdfReader(_io.BytesIO(pdfgen.build_niigata_pdf(data)))
+        for page in reader.pages:
+            writer.add_page(page)
+        n += 1
+    if n == 0:
+        raise HTTPException(400, "出力可能な計画がありません（検証エラーを解消してください）")
+    buf = _io.BytesIO()
+    writer.write(buf)
+    db.audit(user["username"], "template.bulk_pdf", "", f"{n}件")
+    return _Resp(content=buf.getvalue(), media_type="application/pdf",
+                 headers={"Content-Disposition": "attachment; filename=bulk.pdf"})
+
+
 @router.get("/{tid}/file/{name}")
 def download(tid: str, name: str, user: dict = Depends(auth.current_user)):
     auth.require_role(user, "admin", "manager", "teacher")
