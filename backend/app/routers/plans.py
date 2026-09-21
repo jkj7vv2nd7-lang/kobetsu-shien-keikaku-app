@@ -432,3 +432,57 @@ def delete_snippet(sid: str, user: dict = Depends(auth.current_user)):
         c.execute("DELETE FROM snippets WHERE id=?", (sid,))
     db.audit(user["username"], "snippet.delete", sid, "")
     return {"ok": True}
+
+
+def _readiness(data: dict) -> list:
+    """提出前チェックリスト（受け入れ視点）。level: must（提出条件）/want（推奨）。"""
+    items = []
+    v = validate_plan(data)
+    items.append({"item": "必須・整合性エラーなし", "level": "must",
+                  "ok": not v["blocked"], "hint": "保存・検証のerrorを解消してください"})
+    items.append({"item": "保護者確認フラグ", "level": "must",
+                  "ok": bool(data.get("guardian_confirmed")),
+                  "hint": "保護者への説明・合意の上でチェックしてください"})
+    items.append({"item": "了承日・記入日の入力", "level": "must",
+                  "ok": bool(str(data.get("consent_date", "") or "").strip()) and bool(str(data.get("written_date", "") or "").strip()),
+                  "hint": "様式の了承欄・記入日を入力してください"})
+    plain_warns = [i for i in v["issues"] if i.get("rule") == "やさしい日本語" and i.get("level") == "warn"]
+    items.append({"item": "専門用語の見直し", "level": "want",
+                  "ok": len(plain_warns) == 0, "hint": f"残り{len(plain_warns)}件。AI推敲で言い換えを検討"})
+    goals = " ".join(str(data.get(k, "")) for k in ("guidance_long_goal", "short_goal_1"))
+    items.append({"item": "目標の具体性（基準・条件）", "level": "want",
+                  "ok": any(h in goals for h in ("回", "分", "時間", "自分から", "自分で", "までに")),
+                  "hint": "回数・時間・場面を入れると評価しやすくなります"})
+    items.append({"item": "次回見直し日の設定", "level": "want",
+                  "ok": bool(str(data.get("next_review_date", "") or "").strip()),
+                  "hint": "期限アラートに使います"})
+    return items
+
+
+@router.get("/{pid}/readiness")
+def readiness(pid: str, user: dict = Depends(auth.current_user)):
+    p = _get_plan_or_403(pid, user)
+    data = json.loads(p["data_json"] or "{}")
+    items = _readiness(data)
+    return {"items": items, "must_ok": all(i["ok"] for i in items if i["level"] == "must")}
+
+
+@router.get("/{pid}/review-summary")
+def review_summary(pid: str, user: dict = Depends(auth.current_user)):
+    """審査用サマリ（管理職・委員向け）：検証・履歴・意見・合意を一括表示。"""
+    p = _get_plan_or_403(pid, user)
+    data = json.loads(p["data_json"] or "{}")
+    v = validate_plan(data)
+    counts: dict = {}
+    for i in v["issues"]:
+        counts[i.get("level", "?")] = counts.get(i.get("level", "?"), 0) + 1
+    with db.conn() as c:
+        n_ver = c.execute("SELECT COUNT(*) AS n FROM versions WHERE plan_id=?", (pid,)).fetchone()
+        comments = [dict(r) for r in c.execute("SELECT author,body,created_at FROM comments WHERE plan_id=? ORDER BY created_at DESC LIMIT 20", (pid,)).fetchall()]
+        consents = [dict(r) for r in c.execute("SELECT consenter,method,plan_hash,agreed_at FROM consents WHERE plan_id=? ORDER BY agreed_at DESC", (pid,)).fetchall()]
+        records = c.execute("SELECT COUNT(*) AS n FROM records WHERE plan_id=?", (pid,)).fetchone()
+    return {"id": pid, "child_code": p["child_code"], "status": p["status"],
+            "blocked": v["blocked"], "issue_counts": counts,
+            "errors": [i for i in v["issues"] if i.get("level") == "error"][:20],
+            "versions": dict(n_ver)["n"], "comments": comments, "consents": consents,
+            "records": dict(records)["n"], "readiness": _readiness(data)}

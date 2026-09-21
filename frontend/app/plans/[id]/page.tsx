@@ -16,6 +16,8 @@ export default function PlanDetail() {
   const [nori, setNori] = useState<any[]>([]);
   const [snips, setSnips] = useState<any[]>([]);
   const [snipId, setSnipId] = useState("");
+  const [ready, setReady] = useState<any>(null);
+  const [summary, setSummary] = useState<any>(null);
   const [msg, setMsg] = useState("");
 
   async function load() {
@@ -100,6 +102,14 @@ export default function PlanDetail() {
       setIssues(j.issues || []); setMsg(`表現・やさしい日本語チェック ${j.issues?.length}件`);
     } catch (e: any) { setMsg(`チェック失敗: ${e.message}`); }
   }
+  async function loadReady() {
+    try { setReady(await api(`/api/plans/${id}/readiness`, { headers: authHeaders() })); }
+    catch (e: any) { setMsg(`確認失敗: ${e.message}`); }
+  }
+  async function loadSummary() {
+    try { setSummary(await api(`/api/plans/${id}/review-summary`, { headers: authHeaders() })); }
+    catch (e: any) { setMsg(`取得失敗: ${e.message}`); }
+  }
   if (!plan) return <p>{msg || "読込中"}</p>;
   const field = (k: string, label: string) => (
     <div key={k} style={{ marginBottom: 8 }}>
@@ -158,10 +168,28 @@ export default function PlanDetail() {
         onChange={e => setData({ ...data, guardian_confirmed: e.target.checked })} /> 保護者確認済み</label>
       <div style={{ marginTop: 12 }} className="noprint">
         <button className="btn primary" onClick={save}>保存・検証</button>
+        <button className="btn" onClick={loadReady} style={{ marginLeft: 8 }}>提出前チェック</button>
         <button className="btn" onClick={() => status("review")} style={{ marginLeft: 8 }}>提出(review)</button>
         <button className="btn" onClick={() => status("approved")} style={{ marginLeft: 8 }}>承認(approved)</button>
+        <button className="btn" onClick={loadSummary} style={{ marginLeft: 8 }}>審査サマリ</button>
         <button className="btn" onClick={() => window.print()} style={{ marginLeft: 8 }}>印刷</button>
       </div>
+      {ready && (
+        <div className="card">
+          <h3>提出前チェック {ready.must_ok ? "○ 提出可能です" : "× 必須項目が未完了です"}</h3>
+          <ul>{ready.items.map((x: any, n: number) => (
+            <li key={n}>{x.ok ? "○" : x.level === "must" ? "×" : "△"} {x.item}{!x.ok && <span className="muted"> — {x.hint}</span>}</li>))}</ul>
+        </div>
+      )}
+      {summary && (
+        <div className="card">
+          <h3>審査サマリ（管理職・委員向け）</h3>
+          <p>状態 <span className={`badge ${summary.status}`}>{summary.status}</span>／検証 {summary.blocked ? "× エラーあり" : "○"}／履歴{summary.versions}版／記録{summary.records}件／合意{summary.consents.length}件</p>
+          {summary.errors?.length > 0 && (<ul>{summary.errors.map((e: any, n: number) => <li key={n} className="issue-err">[{e.rule}] {e.msg}</li>)}</ul>)}
+          {summary.comments?.length > 0 && (<><h4>会議メモ</h4><ul>{summary.comments.map((c: any, n: number) => <li key={n}>{c.author}：{c.body}</li>)}</ul></>)}
+          {summary.consents?.length > 0 && (<><h4>合意</h4><ul>{summary.consents.map((c: any, n: number) => <li key={n}>{c.consenter}・{c.method}・ハッシュ{c.plan_hash?.slice(0, 8)}</li>)}</ul></>)}
+        </div>
+      )}
       <div className="card noprint" style={{ marginTop: 12 }}>
         <h3>AI支援（匿名化後のみ送信・要確認）</h3>
         <div>
