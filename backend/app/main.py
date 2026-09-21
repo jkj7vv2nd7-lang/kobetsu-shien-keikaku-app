@@ -37,9 +37,15 @@ app.include_router(handover.router)
 
 @app.get("/api/health")
 def health():
+    """公開ヘルス（認証不要・最小情報のみ）。"""
+    return {"ok": True, "llm_provider": llm.PROVIDER, "simple_mode": auth.SIMPLE_MODE}
+
+
+@app.get("/api/health/detail")
+def health_detail(user: dict = Depends(auth.current_user)):
     import shutil
-    info: dict = {"ok": True, "llm_provider": llm.PROVIDER, "db": "postgres" if db.USE_PG else "sqlite",
-                  "simple_mode": auth.SIMPLE_MODE}
+    auth.require_role(user, "admin", "manager")
+    info: dict = {"ok": True, "db": "postgres" if db.USE_PG else "sqlite"}
     try:
         with db.conn() as c:
             info["users"] = dict(c.execute("SELECT COUNT(*) AS n FROM users").fetchone())["n"]

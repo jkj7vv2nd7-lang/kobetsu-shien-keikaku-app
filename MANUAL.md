@@ -1,4 +1,4 @@
-# 操作マニュアル（先生向け・v0.17）
+# 操作マニュアル（先生向け・v0.20）
 
 個別の教育支援計画・個別の指導計画を、AIの力を借りながら作るためのアプリです。
 このマニュアルの通りに進めれば、初めての方でも計画書を完成させられます。
@@ -160,7 +160,7 @@ npm run dev
 
 - **監査ログ**：`/audit` で操作・AI利用・出力の記録を確認、CSV出力できます（管理職のみ）
 - **バックアップ**：`python backend/backup.py backup`（週1推奨、外部媒体へ複写）。復元は `restore <zip> --force`
-- **健康状態**：`http://localhost:8000/api/health` でDB・フォント・空き容量を確認できます
+- **健康状態**：`http://localhost:8000/api/health/detail`（管理職）でDB・フォント・空き容量を確認できます
 - **パスワード**：初期PWの変更徹底、年1回の変更推奨。2段階認証は管理職必須にしてください
 - 詳細は `docs/operations.md` を参照してください
 
@@ -173,7 +173,7 @@ npm run dev
 | ログインできない・試行超過 | 5分待って再試行。管理者に確認 |
 | 提出できない | 保存時の指摘（error）を解消する |
 | 差し込みで空欄が多い | プレビューで空欄セルを確認し、計画の対応欄を入力する |
-| PDFの日本語がおかしい | `/api/health` の `pdf_font` を確認。`pip install japanize-matplotlib` |
+| PDFの日本語がおかしい | `/api/health/detail`（管理職）の `pdf_font` を確認。`pip install japanize-matplotlib` |
 | 画面が真っ白 | バックエンド（8000）とフロント（3000）の両方が起動しているか確認 |
 | AIが応答しない | 既定は外部送信なしの試作応答です。外部LLMは `backend/.env` の設定が必要（`docs/llm-selection.md`） |
 

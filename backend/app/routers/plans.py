@@ -258,6 +258,10 @@ def create_share(pid: str, body: ShareBody, user: dict = Depends(auth.current_us
         st = c.execute("SELECT status FROM plans WHERE id=?", (pid,)).fetchone()
         if not st or dict(st)["status"] not in ("review", "approved"):
             raise HTTPException(400, "共有は提出(review)以降の計画のみ可能です")
+        active = c.execute("SELECT COUNT(*) AS n FROM shares WHERE plan_id=? AND revoked=0 AND expires_at>?",
+                           (pid, time.time())).fetchone()
+        if dict(active)["n"] >= 20:
+            raise HTTPException(400, "有効な共有リンクが上限（20件）です。不要分を取消してください")
         # 期限切れ共有の掃除（ついで）
         try:
             c.execute("DELETE FROM shares WHERE expires_at<? OR revoked=1", (time.time(),))

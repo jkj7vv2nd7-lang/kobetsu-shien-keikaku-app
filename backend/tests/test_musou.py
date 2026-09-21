@@ -74,7 +74,9 @@ def test_duplicate_resets_consent():
 def test_health_and_audit_export():
     cc, _, mh = _client()
     h = cc.get("/api/health").json()
-    assert h["ok"] is True and h["pdf_font"] is True and h["db"] in ("sqlite", "postgres")
+    assert h["ok"] is True and "pdf_font" not in h
+    d = cc.get("/api/health/detail", headers=mh).json()
+    assert d["ok"] is True and d["pdf_font"] is True and d["db"] in ("sqlite", "postgres")
     r = cc.get("/api/audit/export", headers=mh)
     assert r.status_code == 200
     assert "操作" in r.content.decode("utf-8-sig")

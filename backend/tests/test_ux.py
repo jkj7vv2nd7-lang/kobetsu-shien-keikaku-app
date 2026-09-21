@@ -96,3 +96,22 @@ def test_draft_kinds_and_archive_bundle():
     z = cc.get('/api/admin/archive', headers=mh)
     names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
     assert any(n.endswith('.json') for n in names)
+
+
+def test_health_split_and_share_cap():
+    import sys as _s
+    _s.path.insert(0, str(BASE / 'backend'))
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app import auth as auth_mod
+    auth_mod.ensure_user('h_t', 'h_t12345678', 'teacher', '')
+    auth_mod.ensure_user('h_m', 'h_m12345678', 'manager', '')
+    cc = TestClient(app)
+    pub = cc.get('/api/health').json()
+    assert pub['ok'] is True and 'users' not in pub and 'disk_free_mb' not in pub
+    t = cc.post('/api/auth/login', json={'username': 'h_t', 'password': 'h_t12345678'}).json()['token']
+    m = cc.post('/api/auth/login', json={'username': 'h_m', 'password': 'h_m12345678'}).json()['token']
+    th = {'Authorization': f'Bearer {t}'}
+    mh = {'Authorization': f'Bearer {m}'}
+    assert cc.get('/api/health/detail', headers=th).status_code == 403
+    assert cc.get('/api/health/detail', headers=mh).json()['ok'] is True

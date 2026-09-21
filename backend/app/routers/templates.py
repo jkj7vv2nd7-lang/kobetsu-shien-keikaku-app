@@ -256,7 +256,8 @@ def bulk_pdf(body: dict, user: dict = Depends(auth.current_user)):
     writer.write(buf)
     db.audit(user["username"], "template.bulk_pdf", "", f"{n}件")
     return _Resp(content=buf.getvalue(), media_type="application/pdf",
-                 headers={"Content-Disposition": "attachment; filename=bulk.pdf"})
+                 headers={"Content-Disposition": "attachment; filename=bulk.pdf",
+                          "X-Plans-Count": str(n), "X-Plans-Requested": str(len(pids))})
 
 
 @router.get("/{tid}/file/{name}")

@@ -23,7 +23,7 @@ export default function Plans() {
       if (!r.ok) { setMsg(`一括PDF失敗: ${(await r.text()).slice(0, 200)}`); return; }
       const a = document.createElement("a");
       a.href = URL.createObjectURL(await r.blob()); a.download = "bulk.pdf"; a.click();
-      setMsg(`${ids.length}件を一括PDF化しました`);
+      setMsg(`一括PDF化しました（要求${r.headers.get("X-Plans-Requested")}件中${r.headers.get("X-Plans-Count")}件出力）`);
     } catch (e: any) { setMsg(`一括PDF失敗: ${e.message}`); }
   }
   async function duplicate(id: string) {

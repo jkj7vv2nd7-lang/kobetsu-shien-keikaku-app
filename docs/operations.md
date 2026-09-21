@@ -26,8 +26,8 @@ python backend/backup.py restore backend/backups/<file>.zip --force
 
 ## トラブルシュート
 - ログイン試行超過（429）：5分待つ。プロキシ経路の場合は送信元IP単位の制限に注意
-- PDF文字化け：`/api/health` の `pdf_font` を確認（Falseなら pip install japanize-matplotlib）
-- ディスク逼迫：`/api/health` の `disk_free_mb` を確認、backups と templates 出力物を整理
+- PDF文字化け：`/api/health/detail`（管理職）の `pdf_font` を確認（Falseなら pip install japanize-matplotlib）
+- ディスク逼迫：`/api/health/detail`（管理職）の `disk_free_mb` を確認、backups と templates 出力物を整理
 - 監査証跡：`/audit` 画面またはCSV出力で確認
 
 ## 初期設定チェックリスト
