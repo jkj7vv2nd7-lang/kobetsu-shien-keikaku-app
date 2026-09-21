@@ -9,7 +9,11 @@ services:
     volumes: [pgdata:/var/lib/postgresql/data]
   backend:
     build: ./backend
-    env_file: ./backend/.env
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/plans
     ports: ["8000:8000"]
     volumes: [./backend/data:/code/data]
     depends_on: [db]

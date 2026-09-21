@@ -237,3 +237,19 @@ def test_ownership_boundary():
     assert cc.get(f'/api/plans/{pid}/handover?format=csv', headers=hb).status_code == 403
     # A本人は可
     assert cc.get(f'/api/plans/{pid}', headers=ha).status_code == 200
+
+
+def test_caps_and_prune():
+    sys.path.insert(0, str(BASE / 'backend'))
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app import auth as auth_mod
+    from app.seed_data import register_niigata
+    register_niigata()
+    auth_mod.ensure_user('cap_mgr', 'cap_mgr123', 'manager', '')
+    cc = TestClient(app)
+    t = cc.post('/api/auth/login', json={'username': 'cap_mgr', 'password': 'cap_mgr123'}).json()['token']
+    mh = {'Authorization': f'Bearer {t}'}
+    assert isinstance(cc.get('/api/audit?limit=999999', headers=mh).json(), list)
+    r = cc.post('/api/templates/niigata01/mapping', json={'mapping': {f'k{i}': 'v' for i in range(2001)}}, headers=mh)
+    assert r.status_code == 400, r.status_code

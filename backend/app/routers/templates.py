@@ -105,6 +105,8 @@ def slots(tid: str, user: dict = Depends(auth.current_user)):
 @router.post("/{tid}/mapping")
 def save_mapping(tid: str, body: MappingBody, user: dict = Depends(auth.current_user)):
     auth.require_role(user, "admin", "manager", "teacher")
+    if len(body.mapping or {}) > 2000:
+        raise HTTPException(400, "マッピングが多すぎます（2000件以内）")
     (_tdir(tid) / "mapping.json").write_text(json.dumps(body.mapping, ensure_ascii=False, indent=2), encoding="utf-8")
     with db.conn() as c:
         c.execute("UPDATE templates SET mapping_json=?,label=? WHERE id=?",

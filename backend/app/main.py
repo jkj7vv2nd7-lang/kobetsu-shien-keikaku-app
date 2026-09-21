@@ -96,7 +96,7 @@ def public_share(token: str):
 @app.get("/api/audit")
 def audit_list(limit: int = 200, user: dict = Depends(auth.current_user)):
     auth.require_role(user, "admin", "manager")
-    return db.audit_list(limit)
+    return db.audit_list(max(1, min(int(limit or 200), 5000)))
 
 
 @app.post("/api/admin/roster")
@@ -245,7 +245,7 @@ def oneroster_import(body: dict, user: dict = Depends(auth.current_user)):
                 else:
                     skipped.append({"sourcedId": sid, "reason": "既存ユーザ"})
             else:
-                grades = str(r.get("grades", "") or "").strip()[:20]
+                grades = str(r.get("grades", "") or "").strip()[:100]
                 if not c.execute("SELECT id FROM plans WHERE child_code=?", (sid,)).fetchone():
                     pid = _uuid.uuid4().hex[:12]
                     data = {"child_code": sid, "grade": grades, "class_type": ""}

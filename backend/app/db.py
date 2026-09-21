@@ -183,7 +183,7 @@ def conn() -> _Conn:
         from psycopg.rows import dict_row
         return _Conn(psycopg.connect(DATABASE_URL, row_factory=dict_row))
     import sqlite3
-    raw = sqlite3.connect(str(DB_PATH))
+    raw = sqlite3.connect(str(DB_PATH), timeout=30)
     raw.row_factory = sqlite3.Row
     return _Conn(raw)
 
