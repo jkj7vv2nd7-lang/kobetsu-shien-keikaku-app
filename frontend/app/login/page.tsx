@@ -30,22 +30,30 @@ export default function Login() {
   }
   return (
     <main>
-      <h2>ログイン</h2>
-      <p>試作ID: admin/admin123, manager/manager123, teacher/teacher123, viewer/viewer123</p>
-      <input value={u} onChange={e => setU(e.target.value)} placeholder="ユーザ" />
-      <input value={p} onChange={e => setP(e.target.value)} type="password" placeholder="パスワード" style={{ marginLeft: 8 }} />
-      <button onClick={login} style={{ marginLeft: 8 }}>ログイン</button>
-      {needMfa && (<div style={{ marginTop: 8 }}>
-        <input value={code} onChange={e => setCode(e.target.value)} placeholder="確認コード（6桁）" />
-        <button onClick={mfa} style={{ marginLeft: 8 }}>確認</button>
-      </div>)}
-      <p>{msg}</p>
-      {warn && <p className="issue-err">{warn}</p>}
-      <ApiKeyLogin />
-      <Signup />
-      <MfaSetup />
-      <PwChange />
-      <p style={{ fontSize: 13 }}>MFA設定はログイン後に「確認コード発行」から（認証アプリに手動登録）。管理職は有効化を推奨。</p>
+      <div className="card">
+        <h2>ログイン</h2>
+        <p className="muted">試作ID: admin/admin123, manager/manager123, teacher/teacher123, viewer/viewer123</p>
+        <input value={u} onChange={e => setU(e.target.value)} placeholder="ユーザ" />
+        <input value={p} onChange={e => setP(e.target.value)} type="password" placeholder="パスワード" style={{ marginLeft: 8 }} />
+        <button className="btn primary" onClick={login} style={{ marginLeft: 8 }}>ログイン</button>
+        {needMfa && (<div style={{ marginTop: 8 }}>
+          <input value={code} onChange={e => setCode(e.target.value)} placeholder="確認コード（6桁）" />
+          <button className="btn primary" onClick={mfa} style={{ marginLeft: 8 }}>確認</button>
+        </div>)}
+        <p>{msg}</p>
+        {warn && <p className="issue-err">{warn}</p>}
+      </div>
+      <details className="card">
+        <summary>別の方法で入る・新規登録（任意）</summary>
+        <ApiKeyLogin />
+        <Signup />
+      </details>
+      <details className="card">
+        <summary>セキュリティ設定（任意・ログイン後）</summary>
+        <MfaSetup />
+        <PwChange />
+        <p style={{ fontSize: 13 }}>MFA設定はログイン後に「確認コード発行」から（認証アプリに手動登録）。管理職は有効化を推奨。</p>
+      </details>
     </main>
   );
 }
