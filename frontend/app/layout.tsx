@@ -12,6 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <a href="/plans" style={{ color: "#cfe0f5", marginRight: 12 }}>計画</a>
           <a href="/templates" style={{ color: "#cfe0f5", marginRight: 12 }}>様式・差し込み</a>
           <a href="/audit" style={{ color: "#cfe0f5", marginRight: 12 }}>監査</a>
+          <a href="/settings" style={{ color: "#cfe0f5", marginRight: 12 }}>設定</a>
           <a href="/login" style={{ color: "#cfe0f5" }}>ログイン</a>
           <LogoutButton />
         </nav>

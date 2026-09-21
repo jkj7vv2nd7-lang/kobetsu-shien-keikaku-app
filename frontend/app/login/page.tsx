@@ -41,6 +41,7 @@ export default function Login() {
       </div>)}
       <p>{msg}</p>
       {warn && <p className="issue-err">{warn}</p>}
+      <ApiKeyLogin />
       <MfaSetup />
       <PwChange />
       <p style={{ fontSize: 13 }}>MFA設定はログイン後に「確認コード発行」から（認証アプリに手動登録）。管理職は有効化を推奨。</p>
@@ -70,6 +71,26 @@ function PwChange() {
     </div>
   );
 }
+function ApiKeyLogin() {
+  const [key, setKey] = useState("");
+  const [msg, setMsg] = useState("");
+  async function go() {
+    if (!key.startsWith("sk-")) { setMsg("APIキーは sk- で始まります"); return; }
+    localStorage.setItem("token", key.trim());
+    const r = await fetch(`${API}/api/auth/me`, { headers: { Authorization: `Bearer ${key.trim()}` } });
+    if (r.ok) window.location.href = "/";
+    else { localStorage.removeItem("token"); setMsg("キーが無効です"); }
+  }
+  return (
+    <div style={{ marginTop: 16, borderTop: "1px solid #ddd", paddingTop: 8 }}>
+      <h3>APIキーでログイン（委員会許可の運用向け）</h3>
+      <input value={key} onChange={e => setKey(e.target.value)} placeholder="sk-..." style={{ width: 320 }} />
+      <button onClick={go} style={{ marginLeft: 8 }}>ログイン</button>
+      <p style={{ fontSize: 13 }}>{msg}</p>
+    </div>
+  );
+}
+
 function MfaSetup() {
   const [info, setInfo] = useState("");
   const [vcode, setVcode] = useState("");

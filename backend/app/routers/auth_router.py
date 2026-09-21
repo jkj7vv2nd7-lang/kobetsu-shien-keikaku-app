@@ -45,7 +45,7 @@ def login(body: LoginBody, req: Request):
     tok = auth.issue_token(u["id"])
     db.audit(u["username"], "auth.login", "", "")
     return {"token": tok, "username": u["username"], "role": u["role"], "school": u.get("school", ""),
-            "must_change_pw": bool(u.get("must_change_pw"))}
+            "must_change_pw": (False if auth.SIMPLE_MODE else bool(u.get("must_change_pw")))}
 
 
 @router.post("/mfa/login")
@@ -60,7 +60,7 @@ def mfa_login(body: MfaBody, req: Request):
     tok = auth.issue_token(u["id"])
     db.audit(u["username"], "auth.login_mfa", "", "")
     return {"token": tok, "username": u["username"], "role": u["role"], "school": u.get("school", ""),
-            "must_change_pw": bool(u.get("must_change_pw"))}
+            "must_change_pw": (False if auth.SIMPLE_MODE else bool(u.get("must_change_pw")))}
 
 
 @router.post("/mfa/setup")
@@ -126,7 +126,9 @@ def change_password(body: PwBody, user: dict = Depends(auth.current_user)):
 @router.get("/me")
 def me(user: dict = Depends(auth.current_user)):
     return {"username": user["username"], "role": user["role"], "school": user.get("school", ""),
-            "mfa": bool(user.get("totp_secret")), "must_change_pw": bool(user.get("must_change_pw"))}
+            "mfa": bool(user.get("totp_secret")),
+            "must_change_pw": (False if auth.SIMPLE_MODE else bool(user.get("must_change_pw"))),
+            "simple_mode": auth.SIMPLE_MODE}
 
 
 @router.get("/sso/me")
@@ -173,3 +175,38 @@ def sso_me(req: Request):
     tok = auth.issue_token(u["id"])
     db.audit(u["username"], "auth.login_sso", "", "")
     return {"token": tok, "username": u["username"], "role": u["role"]}
+
+
+class KeyBody(BaseModel):
+    username: str = ""
+    label: str = ""
+
+
+@router.get("/keys")
+def list_keys(user: dict = Depends(auth.current_user)):
+    auth.require_role(user, "admin", "manager")
+    with db.conn() as c:
+        rows = c.execute("SELECT k.id,k.label,k.revoked,k.created_at,u.username FROM api_keys k JOIN users u ON u.id=k.user_id ORDER BY k.created_at DESC LIMIT 200").fetchall()
+        return [dict(r) for r in rows]
+
+
+@router.post("/keys")
+def issue_key(body: KeyBody, user: dict = Depends(auth.current_user)):
+    """使用者本人のAPIキーを発行（平文はこの応答でのみ表示）。"""
+    auth.require_role(user, "admin", "manager")
+    with db.conn() as c:
+        r = c.execute("SELECT * FROM users WHERE username=?", (body.username.strip(),)).fetchone()
+        if not r:
+            raise HTTPException(404, "ユーザが見つかりません")
+        raw = auth.issue_api_key(dict(r)["id"], body.label)
+    db.audit(user["username"], "auth.key_issue", body.username.strip(), body.label[:50])
+    return {"api_key": raw, "note": "この画面でのみ表示されます。控えてください"}
+
+
+@router.delete("/keys/{kid}")
+def revoke_key(kid: str, user: dict = Depends(auth.current_user)):
+    auth.require_role(user, "admin", "manager")
+    with db.conn() as c:
+        c.execute("UPDATE api_keys SET revoked=1 WHERE id=?", (kid,))
+    db.audit(user["username"], "auth.key_revoke", kid, "")
+    return {"ok": True}

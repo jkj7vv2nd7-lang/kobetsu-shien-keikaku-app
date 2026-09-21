@@ -15,6 +15,11 @@ from app import db
 ROLES = ("admin", "manager", "teacher", "viewer")
 TOKEN_TTL = 60 * 60 * 12
 
+# 簡易運用モード（委員会許可など組織の承認を前提に手間を省く）。既定OFF
+SIMPLE_MODE = os.getenv("SIMPLE_MODE", "0") == "1"
+if SIMPLE_MODE:
+    TOKEN_TTL = 60 * 60 * 24 * 30  # 30日
+
 # 簡易レート制限（メモリ内・単一プロセス用）
 _RATE: dict = {}
 
@@ -117,17 +122,39 @@ def issue_token(user_id: str) -> str:
 
 
 def current_user(authorization: str | None = Header(default=None)) -> dict:
-    if not authorization or not authorization.lower().startswith("bearer "):
+    key = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        key = authorization.split(None, 1)[1]
+    if not key:
         raise HTTPException(status_code=401, detail="要ログイン（Bearer token）")
-    tok = authorization.split(None, 1)[1]
+    # 1) セッショントークン
     with db.conn() as c:
-        s = c.execute("SELECT * FROM sessions WHERE token=?", (tok,)).fetchone()
-        if not s or s["expires_at"] < time.time():
-            raise HTTPException(status_code=401, detail="トークン無効・期限切れ")
-        u = c.execute("SELECT * FROM users WHERE id=?", (s["user_id"],)).fetchone()
-        if not u:
-            raise HTTPException(status_code=401, detail="ユーザ不明")
-        return dict(u)
+        s = c.execute("SELECT * FROM sessions WHERE token=?", (key,)).fetchone()
+        if s and s["expires_at"] >= time.time():
+            u = c.execute("SELECT * FROM users WHERE id=?", (s["user_id"],)).fetchone()
+            if u:
+                return dict(u)
+        # 2) APIキー（sk-...）
+        if key.startswith("sk-"):
+            import hashlib as _hl
+            h = _hl.sha256(key.encode()).hexdigest()
+            k = c.execute("SELECT * FROM api_keys WHERE key_hash=? AND revoked=0", (h,)).fetchone()
+            if k:
+                u = c.execute("SELECT * FROM users WHERE id=?", (dict(k)["user_id"],)).fetchone()
+                if u:
+                    return dict(u)
+    raise HTTPException(status_code=401, detail="トークン無効・期限切れ")
+
+
+def issue_api_key(user_id: str, label: str = "") -> tuple:
+    """APIキー発行。平文はこの戻り値でのみ参照可（DBはハッシュ保存）。"""
+    import hashlib as _hl
+    raw = "sk-" + secrets.token_hex(24)
+    h = _hl.sha256(raw.encode()).hexdigest()
+    with db.conn() as c:
+        c.execute("INSERT INTO api_keys(id,user_id,key_hash,label,revoked,created_at) VALUES(?,?,?,?,?,?)",
+                  ("k" + secrets.token_hex(6), user_id, h, label[:100], 0, time.time()))
+    return raw
 
 
 def require_role(user: dict, *allowed: str) -> None:
